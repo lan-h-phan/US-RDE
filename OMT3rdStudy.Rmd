@@ -1,0 +1,279 @@
+---
+title: "US RDE 7th Iteration"
+author: "Lan Phan"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(dev = 'svg')
+
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(RColorBrewer)
+library(ggcorrplot)
+library(plotly)
+library(haven)
+```
+
+```{r data import}
+predatraw <- read.csv("/Users/lanphan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Prevention_December+16,+2022_13.36.csv", na.strings = "")
+predatraw <- predatraw[-c(1,2),] #remove question labels
+prodatraw <- read.csv("/Users/lanphan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Promotion_December+16,+2022_13.37.csv", na.strings = "")
+prodatraw <- prodatraw[-c(1,2),]
+
+predatquant <- read_sav("/Users/lanphan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Prevention_December+16,+2022_13.30.sav")
+
+prodatquant <- read_sav("/Users/lanphan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Promotion_December+16,+2022_13.27.sav")
+
+
+
+```
+
+```{r combine dat}
+alldatquant <- rbind(predatquant, prodatquant)
+
+alldatquant <- alldatquant %>%
+  mutate(Race_1 = ifelse(is.na(Race_1), 0, Race_1),
+         Race_2 = ifelse(is.na(Race_2), 0, Race_2),
+         Race_3 = ifelse(is.na(Race_3), 0, Race_3),
+         Race_4 = ifelse(is.na(Race_4), 0, Race_4),
+         Race_5 = ifelse(is.na(Race_5), 0, Race_5),
+         Race_6 = ifelse(is.na(Race_6), 0, Race_6),
+         Race_7 = ifelse(is.na(Race_7), 0, Race_7),
+         Race_8 = ifelse(is.na(Race_8), 0, Race_8),
+         racesort = (Race_1 + Race_2 + Race_3 + Race_4 + Race_5 + Race_6 + Race_7),
+         na = ifelse(racesort < 1, 4, 0),
+         White = ifelse(Race_1 == 0 | racesort == 0 | racesort > 1, 0, 1),
+         Black = ifelse(Race_2 == 1, 2, 0),
+         RaceGroup = (White + Black + na),
+         RaceGroup = ifelse(RaceGroup < 1, 3, RaceGroup),
+         RaceGroup = ifelse(RaceGroup > 3, NA, RaceGroup))
+
+racedat <- alldatquant %>%
+  select(ResponseId, RaceGroup)
+
+prodat <- prodatraw %>%
+  mutate(Condition = 1)
+predat <- predatraw %>%
+  mutate(Condition = 2)
+alldat <- rbind(predat, prodat)
+alldat <- as.data.frame(unclass(alldat), stringsAsFactors = TRUE) #turn all of them into factors
+alldat <- alldat %>%
+  filter(Q75 == "Not willing") #attention check question
+
+alldat <- alldat %>%
+  left_join(racedat)
+```
+
+```{r recode factors}
+
+LikertAgree <- c("Strongly disagree", "Disagree", "Somewhat disagree", "Somewhat agree", "Agree", "Strongly agree")
+
+
+alldat$Q15 <-factor(alldat$Q15, levels = LikertAgree, labels = c(1, 2, 3, 4, 5, 6)) 
+alldat$Q16 <-factor(alldat$Q16, levels = LikertAgree, labels = c(1, 2, 3, 4, 5, 6)) 
+alldat$Q17 <-factor(alldat$Q17, levels = LikertAgree, labels = c(1, 2, 3, 4, 5, 6)) 
+alldat$Q18 <-factor(alldat$Q18, levels = LikertAgree, labels = c(1, 2, 3, 4, 5, 6)) 
+alldat$Q19 <-factor(alldat$Q19, levels = LikertAgree, labels = c(1, 2, 3, 4, 5, 6)) 
+alldat$Q20 <-factor(alldat$Q20, levels = LikertAgree, labels = c(1, 2, 3, 4, 5, 6)) 
+
+LikertAgree2 <- c("1 = Not at all", "2", "3", "4", "5", "6 = Extremely")
+
+alldat$Q5 <-factor(alldat$Q5, levels = LikertAgree2, labels = c(1, 2, 3, 4, 5, 6)) 
+alldat$Q6 <-factor(alldat$Q6, levels = LikertAgree2, labels = c(1, 2, 3, 4, 5, 6)) 
+alldat$Q8 <-factor(alldat$Q8, levels = LikertAgree2, labels = c(1, 2, 3, 4, 5, 6)) 
+alldat$Q11 <-factor(alldat$Q11, levels = LikertAgree2, labels = c(1, 2, 3, 4, 5, 6)) 
+alldat$Q12 <-factor(alldat$Q12, levels = LikertAgree2, labels = c(1, 2, 3, 4, 5, 6)) 
+alldat$Q13 <-factor(alldat$Q13, levels = LikertAgree2, labels = c(1, 2, 3, 4, 5, 6)) 
+
+
+for (i in c(32:56)){
+  alldat[,i] <- factor(alldat[,i], levels = c("Not willing", "Somewhat unwilling", "Undecided", "Somewhat willing", "Very willing"), labels = c(1,2,3,4,5))
+}
+
+for(i in c(57:64)){
+  alldat[,i] <- factor(alldat[,i], levels = c("Strongly disagree", "Disagree", "Somewhat disagree", "Neither agree nor disagree", "Somewhat agree", "Agree", "Strongly agree"), labels = c(1,2,3,4,5, 6,7))
+}
+
+for (i in c(20:64)){
+  alldat[,i] <- as.numeric(alldat[,i])
+}
+
+alldat$Condition <- as.factor(alldat$Condition)
+alldat$RaceGroup <- factor(alldat$RaceGroup, levels = c(1,2,3), labels = c("White", "Black", "non-Black POC"))
+```
+```{r prevention vs promotion data}
+prodat <- alldat %>%
+  filter(Condition == 1)
+predat <- alldat %>%
+  filter(Condition == 2)
+```
+
+# CFA
+```{r CFA mindtypes}
+library(lavaan)
+
+#correlated two factor solution, marker method
+mindtypes <- 'promotion = ~Q5 + Q6 + Q8
+prevention = ~Q11 + Q12 + Q13'
+twofac <- cfa(mindtypes, data = alldat, std.lv=TRUE)
+summary(twofac, fit.measures=TRUE, standardize = TRUE)
+# Model Chi-square is .13
+#CFI = .99, indicating very good fit; similarly, TLI = .99
+#P-value for RMSEA <= .05 is not significant, indicating a close fitting model
+```
+
+```{r CFA locomotion}
+#correlated two factor solution, marker method
+locomotion <- 'assessment = ~Q18 + Q19 + Q20
+locomotion = ~Q15 + Q16 + Q17'
+twofacloco <- cfa(locomotion, data = alldat, std.lv=TRUE)
+summary(twofacloco, fit.measures=TRUE, standardize = TRUE)
+# Model Chi-square is .055
+#CFI = .99, indicating very good fit; similarly, TLI = .98
+#P-value for RMSEA <= .05 is not significant, indicating a close fitting model
+```
+
+```{r CFA for cross-ethnic scale}
+identity <- 'self_hatred = ~Q62 + Q63 + Q64 + Q65
+multicultural_inclusive = ~Q66 + Q67 + Q68 + Q69'
+twofacidentity <- cfa(identity, data = alldat, std.lv = TRUE)
+summary(twofacidentity, fit.measures = TRUE, standardize = TRUE)
+#good fit again
+```
+
+
+Because we also did experimental conditions for the activities, it is better to split the data
+```{r CFA for bbe promotion}
+
+#correlated four factor solution, marker method
+bbe <- 'assessment_political = ~Q21 + Q22 + Q23 + Q24 + Q25 + Q26
+locomotion_political = ~Q27 + Q28 + Q29 + Q30 + Q31 + Q32
+assessment_community = ~Q33 + Q34 + Q35 + Q36 + Q37 + Q38
+locomotion_community = ~Q39 + Q40 + Q71 + Q72 + Q73 + Q74'
+profacbbe <- cfa(bbe, data = prodat, std.lv=TRUE)
+summary(profacbbe, fit.measures=TRUE, standardize = TRUE)
+#the fit is not that great
+```
+```{r CFA for bbe prevention}
+
+#correlated four factor solution, marker method
+bbe <- 'assessment_political = ~Q21 + Q22 + Q23 + Q24 + Q25 + Q26
+locomotion_political = ~Q27 + Q28 + Q29 + Q30 + Q31 + Q32
+assessment_community = ~Q33 + Q34 + Q35 + Q36 + Q37 + Q38
+locomotion_community = ~Q39 + Q40 + Q71 + Q72 + Q73 + Q74'
+prefacbbe <- cfa(bbe, data = predat, std.lv=TRUE)
+summary(prefacbbe, fit.measures=TRUE, standardize = TRUE)
+#the fit is not that great
+```
+```{r CFA for bbe prevention}
+
+#correlated two factor solution, marker method
+bbe2 <- 'assessment = ~Q21 + Q22 + Q23 + Q24 + Q25 + Q26 + Q33 + Q34 + Q35 + Q36 + Q37 + Q38
+locomotion = ~Q27 + Q28 + Q29 + Q30 + Q31 + Q32 + Q39 + Q40 + Q71 + Q72 + Q73 + Q74'
+prefacbbe2 <- cfa(bbe2, data = predat, std.lv=TRUE)
+summary(prefacbbe2, fit.measures=TRUE, standardize = TRUE)
+#the fit is even worse when dividing into 4 
+```
+
+```{r CFA for bbe promotion}
+
+#correlated two factor solution, marker method
+bbe3 <- 'political = ~Q21 + Q22 + Q23 + Q24 + Q25 + Q26 + Q27 + Q28 + Q29 + Q30 + Q31 + Q32
+community = ~Q33 + Q34 + Q35 + Q36 + Q37 + Q38 + Q39 + Q40 + Q71 + Q72 + Q73 + Q74'
+prefacbbe3 <- cfa(bbe3, data = predat, std.lv=TRUE)
+summary(prefacbbe3, fit.measures=TRUE, standardize = TRUE)
+#the fit is even worse when dividing into 4 
+```
+
+## New Grouping Variables from CFA
+```{r}
+newdat <- alldat %>%
+  mutate(promotion = (Q5 + Q6 + Q8)/3,
+         prevention = (Q11 + Q12 + Q13)/3,
+         assessment = (Q18 + Q19 + Q20)/3,
+         locomotion = (Q15 + Q16 + Q17)/3)
+```
+
+# Data Visualization
+
+## Heatmap
+```{r}
+library(ComplexHeatmap)
+library(circlize)
+library(hopach)
+
+# Color of heatmap
+best_col <- colorRamp2(c(-2, 0, 2), c("#82A3FF", "grey", "#8B2E2E"))
+
+#only use the original items and not the average of mindtypes
+#turn into z-scores
+newdathm <- newdat %>%
+  select(Gender, RaceGroup, Politics, Q5, Q6, Q8, Q11, Q12, Q13, Q18, Q19, Q20, Q15, Q16, Q17, promotion, prevention, locomotion, assessment)
+
+hmscale <- scale(newdathm[,c(4:15)])
+
+#Heatmap with uncentered correlation & clustering with average linkage
+
+uncenter.dist <- function(m){
+  as.dist(as.matrix(distancematrix(m, d="cosangle")))
+}
+
+row.clus <- hclust(uncenter.dist(hmscale), method = "ave")
+col.clus <- hclust(uncenter.dist(t(hmscale)), method = "ave")
+
+
+Heatmap(hmscale, name = "Mindtype", 
+        column_title = "Mindtype Items", column_title_side = "bottom",
+        cluster_rows = row.clus, cluster_columns = col.clus,
+        #column_split = 4, row_split = 6,
+        col = best_col) +
+  rowAnnotation(Gender = newdathm[,1],
+                Race = newdathm[,2],
+                Politics = newdathm[,3],
+                   col = list(
+                     Gender = c("Female" = "black", "Male" = "white", "Non-binary" = "grey",
+                                "Transgender" = "grey", "Other" = "grey", 
+                                "Prefer not to say" = "grey"),
+                     Race = c("White" = "white", "Black" = "black", 
+                              "non-Black POC" = "grey"),
+                     Politics = c("Republican" = "red", "Independent" = "purple", 
+                                  "Democrat" = "blue", "Other (please elaborate)" = "grey", 
+                                  "Prefer not to answer" = "grey")),
+                   width = unit(0.5,"cm"))
+
+
+hmscale2 <- scale(newdathm[,c(16:19)])
+
+#Heatmap with uncentered correlation & clustering with average linkage
+
+row.clus2 <- hclust(uncenter.dist(hmscale2), method = "ave")
+col.clus2 <- hclust(uncenter.dist(t(hmscale2)), method = "ave")
+
+Heatmap(hmscale2, name = "Mindtype", 
+        column_title = "Mindtype Items", column_title_side = "bottom",
+        cluster_rows = row.clus2, cluster_columns = col.clus2,
+        #row_split = 6, #column_split = 4, 
+        col = best_col) +
+  rowAnnotation(Gender = newdathm[,1],
+                Race = newdathm[,2],
+                Politics = newdathm[,3],
+                   col = list(
+                     Gender = c("Female" = "black", "Male" = "white", "Non-binary" = "grey",
+                                "Transgender" = "grey", "Other" = "grey", 
+                                "Prefer not to say" = "grey"),
+                     Race = c("White" = "white", "Black" = "black", 
+                              "non-Black POC" = "grey"),
+                     Politics = c("Republican" = "red", "Independent" = "purple", 
+                                  "Democrat" = "blue", "Other (please elaborate)" = "grey", 
+                                  "Prefer not to answer" = "grey")),
+                   width = unit(0.5,"cm"))
+
+```
+

@@ -1,0 +1,540 @@
+---
+title: "Visualization All Studies Data"
+author: "Lan Phan"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: TRUE
+    
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+
+library(haven)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+```
+
+# Merging Data Across Studies
+
+```{r first study, include= FALSE, echo=FALSE}
+#Data Import
+#dat1 <- read_sav("~/Desktop/Academics/PhD Research/U.S. RDE/1st Run/USRDECombined.sav")
+
+#the pre/pro items were on different scales for the first data set
+#dat1 <- dat1 %>%
+#  rename(RelImport = "Religion") %>%
+#  mutate(pro1 = Q1_3*4/3,
+#         pro2 = Q1_5*4/3,
+#         pro3 = Q2_4*4/3,
+#         pre1 = Q1_4*4/3,
+#         pre2 = Q2_1*4/3,
+#         pre3 = Q2_3*4/3,
+#         DV = ActTotalCont/30*5) %>%
+#  select(pro1, pro2, pro3, pre1, pre2, pre3, RelImport,
+#         Race_1, Race_2, Race_3, Race_4, Race_5, Race_6, Race_7, Race_8, Race_9,
+#         Gender, Politics, SES, Condition, DV) %>%
+#  mutate(Survey = 1)
+
+#different scale and different presentation
+
+```
+
+```{r second study}
+#Data Import
+dat2 <- read_sav("~/Desktop/Academics/PhD Research/U.S. RDE/2nd Run/AllData.sav")
+
+dat2 <- dat2 %>%
+  rename(pro1 = "Q5",
+         pro2 = "Q6",
+         pro3 = "Q8",
+         pre1 = "Q11",
+         pre2 = "Q12",
+         pre3 = "Q13",
+         DV = "DVTotalAct") %>%
+  select(pro1, pro2, pro3, pre1, pre2, pre3,
+         Race_1, Race_2, Race_3, Race_4, Race_5, Race_6, Race_7, Race_8, Race_9,
+         Gender, Politics, SES, Condition, DV) %>%
+  mutate(Survey = 2)
+```
+
+```{r fourth study}
+#Data Import
+dat4 <- read_sav("~/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/1st Study/AllDataOMT.sav")
+
+dat4 <- dat4 %>%
+  rename(pro1 = "Q5",
+         pro2 = "Q6",
+         pro3 = "Q8",
+         pre1 = "Q11",
+         pre2 = "Q12",
+         pre3 = "Q13",
+         DV = "DVTotal") %>%
+  select(pro1, pro2, pro3, pre1, pre2, pre3,
+         Race_1, Race_2, Race_3, Race_4, Race_5, Race_6, Race_7, Race_8, Race_9,
+         Gender, Politics, SES, Condition, DV) %>%
+  mutate(Survey = 4)
+```
+
+```{r fifth study}
+dat5 <- read_sav("~/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/2nd Study/AllData.sav")
+
+dat5 <- dat5 %>%
+  rename(pro1 = "Q5",
+         pro2 = "Q6",
+         pro3 = "Q8",
+         pre1 = "Q11",
+         pre2 = "Q12",
+         pre3 = "Q13",
+         DV = "DVTotal") %>%
+  select(pro1, pro2, pro3, pre1, pre2, pre3,
+         Race_1, Race_2, Race_3, Race_4, Race_5, Race_6, Race_7, Race_8, Race_9,
+         Gender, Politics, SES, Condition, DV) %>%
+  mutate(Survey = 5)
+```
+
+```{r combine all data}
+alldat <- rbind(dat2, dat4, dat5)
+```
+
+# Tidying Data
+
+```{r}
+#Race_9 = Prefer not to say
+#Coding racial variables
+
+alldat <- alldat %>%
+  mutate(Race_1 = ifelse(is.na(Race_1), 0, Race_1),
+         Race_2 = ifelse(is.na(Race_2), 0, Race_2),
+         Race_3 = ifelse(is.na(Race_3), 0, Race_3),
+         Race_4 = ifelse(is.na(Race_4), 0, Race_4),
+         Race_5 = ifelse(is.na(Race_5), 0, Race_5),
+         Race_6 = ifelse(is.na(Race_6), 0, Race_6),
+         Race_7 = ifelse(is.na(Race_7), 0, Race_7),
+         Race_8 = ifelse(is.na(Race_8), 0, Race_8),
+         racesort = (Race_1 + Race_2 + Race_3 + Race_4 + Race_5 + Race_6 + Race_7),
+         na = ifelse(racesort < 1, 4, 0),
+         White = ifelse(Race_1 == 0 | racesort == 0 | racesort > 1, 0, 1),
+         Black = ifelse(Race_2 == 1, 2, 0),
+         RaceGroup = (White + Black + na),
+         RaceGroup = ifelse(RaceGroup < 1, 3, RaceGroup),
+         RaceGroup = ifelse(RaceGroup > 3, NA, RaceGroup))
+# finally the race sorting works accurately! Urghh too forever; I wonder if there's a better way       
+
+        
+# Make factor variables
+alldat$Gender <- factor(alldat$Gender,
+                        levels = c(1,2,3,4),
+                        labels = c("Male", "Female", "Non-binary", "Transgender"))
+alldat$Politics <- factor(alldat$Politics,
+                          levels = c(1, 2, 3),
+                          labels = c("Democrat", "Independent", "Republican"))
+alldat$SES <- factor(alldat$SES,
+                     levels = c(1,2,3,4,5),
+                     labels = c("$10k and lower", "$10-41k", "$41-87k", "$87-165k", "$165k and above"))
+alldat$Condition <- factor(alldat$Condition,
+                        levels = c(1,2),
+                        labels = c("Promotion Frame", "Prevention Frame"))
+alldat$Survey <- as.factor(alldat$Survey)
+alldat$RaceGroup <- factor(alldat$RaceGroup,
+                           levels = c(1,2,3),
+                           labels = c("White", "Black", "non-Black POC"))
+
+#remove the individual racial columns
+#also calculate average mindtypes for descriptives
+cleandat <- alldat %>%
+  select(!starts_with("Race_") & !racesort & !na & !White & !Black) %>%
+  mutate(promotion = (pro1 + pro2 + pro3)/3,
+         prevention = (pre1 + pre2 + pre3)/3,
+         difference = promotion - prevention)
+
+
+
+```
+
+# Data Visualization
+
+
+## Descriptives Statistics
+```{r}
+summary(cleandat)
+sd(cleandat$pro1)
+sd(cleandat$pro2)
+sd(cleandat$pro3)
+sd(cleandat$pre1)
+sd(cleandat$pre2)
+sd(cleandat$pre3)
+sd(cleandat$promotion)
+sd(cleandat$prevention)
+sd(cleandat$DV)
+```
+
+
+
+## Heatmap
+```{r}
+library(ComplexHeatmap)
+library(circlize)
+library(hopach)
+
+#only use the original items and not the average of mindtypes
+#turn into z-scores
+alldathm <- scale(cleandat[,c(1:6)])
+
+# Color of heatmap
+best_col <- colorRamp2(c(-2, 0, 2), c("#82A3FF", "grey", "#8B2E2E"))
+
+#Heatmap with uncentered correlation & clustering with average linkage
+
+uncenter.dist <- function(m){
+  as.dist(as.matrix(distancematrix(m, d="cosangle")))
+}
+
+row.clus <- hclust(uncenter.dist(alldathm), method = "ave")
+col.clus <- hclust(uncenter.dist(t(alldathm)), method = "ave")
+
+
+Heatmap(alldathm, name = "Mindtype", 
+        column_title = "Mindtype Items", column_title_side = "bottom",
+        cluster_rows = row.clus, cluster_columns = col.clus,
+        col = best_col)
+
+#some splittinggg
+Heatmap(alldathm, name = "Mindtype", 
+        column_title = "Mindtype Items", column_title_side = "bottom",
+        cluster_rows = row.clus, cluster_columns = col.clus,
+        column_split = 2, 
+        col = best_col)
+
+Heatmap(alldathm, name = "Mindtype", 
+        column_title = "Mindtype Items", column_title_side = "bottom",
+        cluster_rows = row.clus, cluster_columns = col.clus,
+        column_split = 2, row_split = 6,
+        col = best_col)
+```
+### Heatmap Divided by Survey
+```{r}
+
+#dat5 has different number of rows, cannot add to the other
+#random sample of dat5 
+set.seed(1234)
+
+dat5random <- dat5[sample(1:nrow(dat5), 300),]
+
+
+dat2hm <- scale(dat2[,1:6])
+dat4hm <- scale(dat4[,1:6])
+dat5hm <- scale(dat5random[,1:6])
+
+#Survey 2
+row.clus2 <- hclust(uncenter.dist(dat2hm), method = "ave")
+col.clus2 <- hclust(uncenter.dist(t(dat2hm)), method = "ave")
+
+
+hmdat2 = Heatmap(dat2hm, name = "Survey 2", 
+        cluster_rows = row.clus2, cluster_columns = col.clus2,
+        column_title = "Survey 2",
+        col = best_col)
+
+hmdat2
+
+# Survey 4
+row.clus4 <- hclust(uncenter.dist(dat4hm), method = "ave")
+col.clus4 <- hclust(uncenter.dist(t(dat4hm)), method = "ave")
+
+
+hmdat4 = Heatmap(dat4hm, name = "Survey 4", 
+        cluster_rows = row.clus4, cluster_columns = col.clus4,
+        column_title = "Survey 4",
+        col = best_col)
+hmdat4
+
+# Survey 5
+row.clus5 <- hclust(uncenter.dist(dat5hm), method = "ave")
+col.clus5 <- hclust(uncenter.dist(t(dat5hm)), method = "ave")
+
+
+hmdat5 = Heatmap(dat5hm, name = "Survey 5", 
+        cluster_rows = row.clus5, cluster_columns = col.clus5,
+        column_title = "Survey 5",
+        col = best_col)
+
+hmdat5
+
+hmdat2 + hmdat4 + hmdat5
+#this was fun but not helpful
+#maybe look at them individually survey-wise
+
+```
+
+
+## Distribution
+```{r}
+#promotion vs. prevention orientation
+cleandat %>%
+  filter(!is.na(Condition)) %>%
+  ggplot(mapping = aes(x = promotion, fill = Condition, color = Condition)) +
+  geom_density(alpha = 0.3) +
+  labs(x = "Average Promotion Mindtype", y = "Distribution") +
+  ggtitle("Density Plot of Promotion Mindtype, by Survey") +
+  theme_bw()
+#not normal distribution
+
+
+cleandat %>%
+  filter(!is.na(Condition)) %>%
+  ggplot(mapping = aes(x = prevention, fill = Condition, color = Condition)) +
+  geom_density(alpha = 0.3) +
+  labs(x = "Average Prevention Mindtype", y = "Distribution") +
+  ggtitle("Density Plot of Prevention Mindtype, by Survey") +
+  theme_bw()
+#what a weird distribution shape
+
+#hmm interesting that prevention frame distribution is not smooth
+
+#difference scores between the mindtypes
+#interactive! 
+plotdiff <- cleandat %>%
+  filter(!is.na(Survey) & !is.na(Condition)) %>%
+  ggplot(mapping = aes(x = difference, fill = Survey, color = Survey)) +
+  geom_density(alpha = 0.3) +
+  facet_wrap(~Condition) +
+  labs(x = "Promotion & Prevention Score Difference", y = "Distribution") +
+  ggtitle("Density Plot of Mindtypes, by Survey and Condition") +
+  theme_bw()
+
+ggplotly(plotdiff)
+
+
+```
+
+## Group Differences
+```{r}
+#setting up 
+# Connected Dot Plot yayyy
+col_dotplot <- c("#E69F00", "#0072B2", "#D55E00", "#56B4E9", "#800000")
+```
+Part of the following R codes for the connected dot plot are from Bowers et al., 2022. 
+### Politics
+```{r}
+cleandat %>%
+  filter(!is.na(Politics)) %>%
+  group_by(Politics) %>%
+  dplyr::summarise(N = n(),
+                   "Enhance everyone's health & wellbeing" = mean(pro1, na.rm = TRUE),
+                   "Greater economic prosperity to area" = mean(pro2, na.rm = TRUE),
+                   "Better future for next generation" = mean(pro3, na.rm = TRUE),
+                   "Promotion Average" = mean(promotion, na.rm = TRUE),
+                   "Militant/extreme members make it worse" = mean(pre1, na.rm = TRUE),
+                   "Don't want loved ones to die/be harmed" = mean(pre2, na.rm = TRUE),
+                   "End number of Americans killed/injured" = mean(pre3, na.rm = TRUE),
+                   "Prevention Average" = mean(prevention, na.rm = TRUE)) %>%
+  pivot_longer(c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average"), 
+               names_to = "Item", values_to = "Mean") %>%
+  ggplot(aes(x = factor(Item, levels = rev(unique(Item)), ordered = TRUE),
+             y = Mean, size = N, fill = Politics)) +
+  scale_fill_manual(values = col_dotplot) +
+  geom_line(aes(group = Item), size = .2) +
+  geom_point(aes(size = N), shape = 21, alpha = .7) +
+  theme(legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm')) +
+  ylim(1,4) +
+  labs(x = NULL, y = "Mean (Not At All - Extremely Motivating)",
+       title = "Mean by Political Groups") +
+  theme(plot.title = element_text(size = 5)) +
+  coord_flip() + 
+  theme_bw()
+```
+
+### Race
+```{r}
+cleandat %>%
+  filter(!is.na(RaceGroup)) %>%
+  group_by(RaceGroup) %>%
+  dplyr::summarise(N = n(),
+                   "Enhance everyone's health & wellbeing" = mean(pro1, na.rm = TRUE),
+                   "Greater economic prosperity to area" = mean(pro2, na.rm = TRUE),
+                   "Better future for next generation" = mean(pro3, na.rm = TRUE),
+                   "Promotion Average" = mean(promotion, na.rm = TRUE),
+                   "Militant/extreme members make it worse" = mean(pre1, na.rm = TRUE),
+                   "Don't want loved ones to die/be harmed" = mean(pre2, na.rm = TRUE),
+                   "End number of Americans killed/injured" = mean(pre3, na.rm = TRUE),
+                   "Prevention Average" = mean(prevention, na.rm = TRUE)) %>%
+  pivot_longer(c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average"), 
+               names_to = "Item", values_to = "Mean") %>%
+  ggplot(aes(x = factor(Item, levels = rev(unique(Item)), ordered = TRUE),
+             y = Mean, size = N, fill = RaceGroup)) +
+  scale_fill_manual(values = col_dotplot) +
+  geom_line(aes(group = Item), size = .2) +
+  geom_point(aes(size = N), shape = 21, alpha = .7) +
+  theme(legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm')) +
+  ylim(1,4) +
+  labs(x = NULL, y = "Mean (Not At All - Extremely Motivating)",
+       title = "Mean by Racial Groups") +
+  theme(plot.title = element_text(size = 5)) +
+  coord_flip() + 
+  theme_bw()
+
+# wow this is important for the scale
+#For prevention item #1 is significantly different for Black participants re: rating
+#we need to revise this item
+```
+
+### Gender
+
+```{r}
+cleandat %>%
+  filter(Gender == c("Female", "Male")) %>%
+  group_by(Gender) %>%
+  dplyr::summarise(N = n(),
+                   "Enhance everyone's health & wellbeing" = mean(pro1, na.rm = TRUE),
+                   "Greater economic prosperity to area" = mean(pro2, na.rm = TRUE),
+                   "Better future for next generation" = mean(pro3, na.rm = TRUE),
+                   "Promotion Average" = mean(promotion, na.rm = TRUE),
+                   "Militant/extreme members make it worse" = mean(pre1, na.rm = TRUE),
+                   "Don't want loved ones to die/be harmed" = mean(pre2, na.rm = TRUE),
+                   "End number of Americans killed/injured" = mean(pre3, na.rm = TRUE),
+                   "Prevention Average" = mean(prevention, na.rm = TRUE)) %>%
+  pivot_longer(c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average"), 
+               names_to = "Item", values_to = "Mean") %>%
+  ggplot(aes(x = factor(Item, levels = rev(unique(Item)), ordered = TRUE),
+             y = Mean, size = N, fill = Gender)) +
+  scale_fill_manual(values = col_dotplot) +
+  geom_line(aes(group = Item), size = .2) +
+  geom_point(aes(size = N), shape = 21, alpha = .7) +
+  theme(legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm')) +
+  ylim(1,4) +
+  labs(x = NULL, y = "Mean (Not At All - Extremely Motivating)",
+       title = "Mean by Gender") +
+  theme(plot.title = element_text(size = 5)) +
+  coord_flip() + 
+  theme_bw()
+```
+
+### Socio-economic Status
+```{r}
+cleandat %>%
+  filter(!is.na(SES)) %>%
+  group_by(SES) %>%
+  dplyr::summarise(N = n(),
+                   "Enhance everyone's health & wellbeing" = mean(pro1, na.rm = TRUE),
+                   "Greater economic prosperity to area" = mean(pro2, na.rm = TRUE),
+                   "Better future for next generation" = mean(pro3, na.rm = TRUE),
+                   "Promotion Average" = mean(promotion, na.rm = TRUE),
+                   "Militant/extreme members make it worse" = mean(pre1, na.rm = TRUE),
+                   "Don't want loved ones to die/be harmed" = mean(pre2, na.rm = TRUE),
+                   "End number of Americans killed/injured" = mean(pre3, na.rm = TRUE),
+                   "Prevention Average" = mean(prevention, na.rm = TRUE)) %>%
+  pivot_longer(c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average"), 
+               names_to = "Item", values_to = "Mean") %>%
+  ggplot(aes(x = factor(Item, levels = rev(unique(Item)), ordered = TRUE),
+             y = Mean, size = N, fill = SES)) +
+  scale_fill_manual(values = col_dotplot) +
+  geom_line(aes(group = Item), size = .2) +
+  geom_point(aes(size = N), shape = 21, alpha = .7) +
+  theme(legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm')) +
+  ylim(1,4) +
+  labs(x = NULL, y = "Mean (Not At All - Extremely Motivating)",
+       title = "Mean by Socio-economic Status") +
+  theme(plot.title = element_text(size = 5)) +
+  coord_flip() + 
+  theme_bw()
+#even though we have a smaller pool for $165k+
+#not surprising that the richest group has the 
+#least interest in greater economic prosperity to the area
+#also number of people killed (decreased empathy?)
+
+
+```
+
+## Interaction between Groups
+### Political Group and Race
+```{r}
+
+#Promotion 
+cleandat %>%
+  filter(!is.na(Politics) & !is.na(RaceGroup)) %>%
+  mutate(difference = promotion - prevention) %>%
+  ggplot(mapping = aes(x = difference)) +
+  geom_density(fill = "#82A3FF", alpha = 0.5) +
+  facet_grid(Politics ~ RaceGroup) +
+  labs(x = "Difference between Promotion & Prevention") +
+  theme_bw()
+
+
+```
+### Political Group and Gender
+```{r}
+#DV
+
+# Gender and Political Groups
+
+cleandat %>%
+  filter(Gender == c("Male", "Female") & !is.na(Politics)) %>%
+  group_by(Gender, Politics) %>%
+  summarize(DV1 = mean(DV)) %>%
+  ggplot(mapping = aes(x = Politics, y = DV1, fill = Politics)) +
+  geom_point() +
+  ylim(1,5) +
+  labs(x = NULL, y = "Willingness to Engage", fill = "Political Group") +
+  guides(fill = FALSE) +
+  coord_flip() +
+  facet_wrap(~Gender) +
+  theme_bw()
+```
+
+### Intersectionality
+First introduced in 1989 by Dr. Kimberlé Williams Crenshaw and adapted by Dr. Patricia Hill Collins a year later, intersectionality refers to how people experience different parts of their identities simultaneously instead of separately. For example, a Black queer woman experiences her life as Black, queer, *and* as a woman - we cannot fully separate these identities from one another.
+```{r}
+cleandat %>%
+  filter(Gender == c("Male", "Female") & !is.na(RaceGroup)) %>%
+  mutate(difference = promotion - prevention) %>%
+  ggplot(mapping = aes(x = difference)) +
+  geom_density(fill = "#82A3FF", alpha = 0.5) +
+  facet_grid(Gender ~ RaceGroup) +
+  labs(x = "Difference between Promotion & Prevention") +
+  theme_bw()
+#higher scores mean leaning more towards prevention
+#don't have enough respondents for other groupings
+```
+
+
+
+
+
+
+
+
+
