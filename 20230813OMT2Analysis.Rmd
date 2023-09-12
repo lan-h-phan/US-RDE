@@ -1,0 +1,781 @@
+---
+title: "OMT 2nd Study Analysis"
+author: "Lan Phan"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(haven)
+library(tidyverse)
+library(dplyr)
+library(Hmisc)
+dat <- read_sav("~/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/2nd Study/AllData.sav")
+```
+
+
+# CFA
+
+```{r}
+library(lavaan)
+#correlated two factor solution, marker method
+mindtypes <- 'promotion = ~Q5 + Q6 + Q8
+prevention = ~Q11 + Q12 + Q13'
+twofac <- cfa(mindtypes, data = dat, std.lv=TRUE)
+summary(twofac, fit.measures=TRUE, standardize = TRUE)
+```
+
+Model Chi-square is .05
+CFI = .99, indicating very good fit; similarly, TLI = .98
+P-value for RMSEA <= .05 is not significant, indicating a close fitting model
+
+
+
+# Data Cleaning
+
+```{r}
+#rename variables
+dat$RaceGroup <- factor(dat$Race, labels = c(1,2,3))
+dat$PoliGroup <- factor(dat$Politics, labels = c(1,2,3,4,5))
+
+#select only variables of interests
+dat2 <- select(dat, RaceGroup, Gender, PoliGroup, Condition, Difference, DiffAbs,
+               ERAM, ERMD, ERSH, ERAD, ERET, ERMI,ERERS, ProCont, ProDich, PreCont, PreDich, DVDiaEdu, DVSocPhy, DVMedia, DVTotal)
+cor.test(dat2$ERMI, dat2$DVTotal, method = "pearson")
+```
+
+
+# Correlation
+
+#Two-way ANOVA
+
+```{r}
+library(car)
+library(emmeans)
+```
+
+## Correlation Test 
+```{r}
+#maybe cross-ethnic identity subscales are covariates
+dat3 <- select(dat, ERAM, ERMD, ERSH, ERAD, ERET, ERMI,ERERS, ProCont, ProDich, PreCont, PreDich, DVDiaEdu, DVSocPhy, DVMedia, DVTotal)
+
+library(corrplot)
+corrplot(cor(dat3, use = "pairwise.complete.obs"))
+```
+
+
+## Creating Factors
+
+```{r}
+#Create Mindtype Groups
+summary(dat2$Difference)
+dat2$Mindtypes <- cut(dat2$Difference,
+                   breaks = c(-Inf, -.33, .33, Inf),
+                   levels = c(1,2,3),
+                   labels = c("Prevention", "Hybrid", "Promotion"))
+
+#Create weights for the groups
+library(plyr)
+dat2$MindWts <- revalue(dat2$Mindtypes, c("Prevention"="1", "Hybrid"="2", "Promotion"="1"))
+dat2$MindWts <- as.numeric(as.vector(dat2$MindWts)) #turn into numeric
+
+#### Create factors for Cross-Ethnic Identity
+summary(dat2$ERAM) #mean = 4.316
+dat2$ERAMDich <- cut(dat2$ERAM,
+                     breaks = c(-Inf, 4.316, Inf),
+                     levels = c(1,2),
+                     labels = c("Low", "High"))
+
+summary(dat2$ERMD)
+dat2$ERMDDich <- cut(dat2$ERMD,
+                     breaks = c(-Inf, 3.38, Inf),
+                     levels = c(1,2),
+                     labels = c("Low", "High"))
+
+summary(dat2$ERSH)
+dat2$ERSHDich <- cut(dat2$ERSH,
+                     breaks = c(-Inf, 2.43, Inf),
+                     levels = c(1,2),
+                     labels = c("Low", "High"))
+
+summary(dat2$ERAD)
+dat2$ERADDich <- cut(dat2$ERAD,
+                     breaks = c(-Inf, 1.91, Inf),
+                     levels = c(1,2),
+                     labels = c("Low", "High"))
+summary(dat2$ERET)
+dat2$ERETDich <- cut(dat2$ERET,
+                     breaks = c(-Inf, 3.61, Inf),
+                     levels = c(1,2),
+                     labels = c("Low", "High"))
+
+summary(dat2$ERMI)
+dat2$ERMIDich <- cut(dat2$ERMI,
+                     breaks = c(-Inf, 5.29, Inf),
+                     levels = c(1,2),
+                     labels = c("Low", "High"))
+
+summary(dat2$ERERS)
+dat2$ERERSDich <- cut(dat2$ERERS,
+                     breaks = c(-Inf, 3.01, Inf),
+                     levels = c(1,2),
+                     labels = c("Low", "High"))
+
+#create 2 sets of experimental conditions
+datPro <- dat2[dat2$Condition == 1,]
+datPre <- dat2[dat2$Condition == 2,]
+```
+
+## Promotion
+
+### DV1 -- Dialogue and Education
+```{r}
+##### MindtypesxERAM (Assimilation)
+lmMindERAM <- lm(DVDiaEdu~Mindtypes*ERAMDich, data = datPro, weights = MindWts)
+summary(lmMindERAM)
+#n.s.
+#No interaction here
+
+##### MindtypesxERMD (Miseducation)
+lmMindERMD <- lm(DVDiaEdu~Mindtypes*ERMDDich, data = datPro, weights = MindWts)
+summary(lmMindERMD)
+#n.s.
+
+##### MindtypesxERSH (Self-Hatred)
+lmMindERSH <- lm(DVDiaEdu~Mindtypes*ERSHDich, data = datPro, weights = MindWts)
+summary(lmMindERSH)
+#main effects for SH only
+
+##### MindtypesxERAD (Anti-Dominant)
+lmMindERAD <- lm(DVDiaEdu~Mindtypes*ERADDich, data = datPro, weights = MindWts)
+summary(lmMindERAD)
+#main effects for AD only
+
+##### MindtypesxERET (Ethnocentricity)
+lmMindERET <- lm(DVDiaEdu~Mindtypes*ERETDich, data = datPro, weights = MindWts)
+summary(lmMindERET)
+#main effects for ET only
+
+##### MindtypesxERMI (Multiculturalist Perspective)
+lmMindERMI <- lm(DVDiaEdu~Mindtypes*ERMIDich, data = datPro, weights = MindWts)
+summary(lmMindERMI)
+#might have interaction effect, although weak
+#interaction plot
+emmMindERMI <- emmeans(object = lmMindERMI,
+                 specs = ~Mindtypes:ERMIDich)
+emmip(object = emmMindERMI,
+      formula = Mindtypes~ERMIDich,
+      CIs = TRUE)
+#the effect is not very clear
+
+##### MindtypesxERERS (Ethnic-Racial Salience)
+lmMindERERS <- lm(DVDiaEdu~Mindtypes*ERERSDich, data = datPro, weights = MindWts)
+summary(lmMindERERS)
+#main effect only
+```
+
+### DV2 -- Social & Physical Activities
+```{r}
+##### MindtypesxERAM (Assimilation)
+lmMindERAM2 <- lm(DVSocPhy~Mindtypes*ERAMDich, data = datPro, weights = MindWts)
+summary(lmMindERAM2)
+#n.s.
+#No interaction here
+
+##### MindtypesxERMD (Miseducation)
+lmMindERMD2 <- lm(DVSocPhy~Mindtypes*ERMDDich, data = datPro, weights = MindWts)
+summary(lmMindERMD2)
+#n.s.
+
+##### MindtypesxERSH (Self-Hatred)
+lmMindERSH2 <- lm(DVSocPhy~Mindtypes*ERSHDich, data = datPro, weights = MindWts)
+summary(lmMindERSH2)
+#n.s.
+
+##### MindtypesxERAD (Anti-Dominant)
+lmMindERAD2 <- lm(DVSocPhy~Mindtypes*ERADDich, data = datPro, weights = MindWts)
+summary(lmMindERAD2)
+#n.s.
+
+##### MindtypesxERET (Ethnocentricity)
+lmMindERET2 <- lm(DVSocPhy~Mindtypes*ERETDich, data = datPro, weights = MindWts)
+summary(lmMindERET2)
+#n.s.
+
+##### MindtypesxERMI (Multiculturalist Perspective)
+lmMindERMI2 <- lm(DVSocPhy~Mindtypes*ERMIDich, data = datPro, weights = MindWts)
+summary(lmMindERMI2)
+#main effect for MI only
+
+##### MindtypesxERERS (Ethnic-Racial Salience)
+lmMindERERS2 <- lm(DVSocPhy~Mindtypes*ERERSDich, data = datPro, weights = MindWts)
+summary(lmMindERERS2)
+#main effect only
+```
+
+### DV3 -- Social Media#####
+```{r}
+##### MindtypesxERAM (Assimilation)
+lmMindERAM3 <- lm(DVMedia~Mindtypes*ERAMDich, data = datPro, weights = MindWts)
+summary(lmMindERAM3)
+#might have a light interaction but not clear
+
+##### MindtypesxERMD (Miseducation)
+lmMindERMD3 <- lm(DVMedia~Mindtypes*ERMDDich, data = datPro, weights = MindWts)
+summary(lmMindERMD3)
+#n.s.
+
+##### MindtypesxERSH (Self-Hatred)
+lmMindERSH3 <- lm(DVMedia~Mindtypes*ERSHDich, data = datPro, weights = MindWts)
+summary(lmMindERSH3)
+#n.s.
+
+##### MindtypesxERAD (Anti-Dominant)
+lmMindERAD3 <- lm(DVMedia~Mindtypes*ERADDich, data = datPro, weights = MindWts)
+summary(lmMindERAD3)
+#n.s.
+
+##### MindtypesxERET (Ethnocentricity)
+lmMindERET3 <- lm(DVMedia~Mindtypes*ERETDich, data = datPro, weights = MindWts)
+summary(lmMindERET3)
+#main effect for ET only
+
+##### MindtypesxERMI (Multiculturalist Perspective)
+lmMindERMI3 <- lm(DVMedia~Mindtypes*ERMIDich, data = datPro, weights = MindWts)
+summary(lmMindERMI3)
+#main effect for MI only
+
+##### MindtypesxERERS (Ethnic-Racial Salience)
+lmMindERERS3 <- lm(DVMedia~Mindtypes*ERERSDich, data = datPro, weights = MindWts)
+summary(lmMindERERS3)
+#main effect only
+
+
+#######Maybe two-way ANOVA is not the way; probably back to Moderation Analyses
+
+```
+
+# Moderation Analysis
+
+```{r}
+#Running Cross-Ethnic Racial Subscales as continuous variables
+
+
+
+###************Promotion**************####
+
+####ERAM Assimilation######
+
+#Dialogue & Education
+ModelERAM1 <- lm(DVDiaEdu~Mindtypes + ERAM + Mindtypes:ERAM, data = datPro, weights = MindWts)
+summary(ModelERAM1) #Interaction  significant at the p = .02 level
+
+#Create interaction plot
+ggplot(datPro, aes(x = ERAM,
+                y = DVDiaEdu,
+                color = Mindtypes), weights = MindWts) +
+  theme_bw() +
+  labs(x = "Assimilation",
+       y = "Dialogue & Education",
+       color = "Mindtypes") +
+  geom_smooth(method = "lm", se = F) #turn it into lines
+#for people with strong mindtype orientation (either promotion or prevention), 
+#lower assimilation beliefs tend to lead to higher willingness to engage in dialogue & education activities (promotion framed)
+#for people with both mindtypes
+# higher assimilation beliefs tend to lead to higher willingness
+
+#Social & Physical Activities
+ModelERAM2 <- lm(DVSocPhy~Mindtypes + ERAM + Mindtypes:ERAM, data = datPro, weights = MindWts)
+summary(ModelERAM2) #n.s.
+
+#Social Media
+ModelERAM3 <- lm(DVMedia~Mindtypes + ERAM + Mindtypes:ERAM, data = datPro, weights = MindWts)
+summary(ModelERAM3) #n.s.
+
+#Total Activities
+ModelERAM4 <- lm(DVTotal~Mindtypes + ERAM + Mindtypes:ERAM, data = datPro, weights = MindWts)
+summary(ModelERAM4) #n.s.
+
+
+####ERMD Miseducation######
+
+#Dialogue & Education
+ModelERMD1 <- lm(DVDiaEdu~Mindtypes + ERMD + Mindtypes:ERMD, data = datPro, weights = MindWts)
+summary(ModelERMD1) #n.s.
+
+#Social & Physical Activities
+ModelERMD2 <- lm(DVSocPhy~Mindtypes + ERMD + Mindtypes:ERMD, data = datPro, weights = MindWts)
+summary(ModelERMD2) #n.s.
+
+#Social Media
+ModelERMD3 <- lm(DVMedia~Mindtypes + ERMD + Mindtypes:ERMD, data = datPro, weights = MindWts)
+summary(ModelERMD3) #interaction significant at the .04 level
+
+#Create interaction plot
+ggplot(datPro, aes(x = ERMD,
+                   y = DVMedia,
+                   color = Mindtypes), weights = MindWts) +
+  theme_bw() +
+  labs(x = "Miseducation",
+       y = "Social Media",
+       color = "Mindtypes") +
+  geom_smooth(method = "lm", se = F) #turn it into lines
+#When people have promotion mindtype in promotion framing (promotion-promotion matches)
+#the level of miseducation did not influence the willingness to engage in social media activities
+#However, for people with hybrid and prevention mindtype
+#higher miseducation beliefs led to higher willingness to engage in social media activities
+
+#Total Activities
+ModelERMD4 <- lm(DVTotal~Mindtypes + ERMD + Mindtypes:ERMD, data = datPro, weights = MindWts)
+summary(ModelERMD4) #n.s.
+
+
+
+####ERSH Self-Hatred######
+
+#Dialogue & Education
+ModelERSH1 <- lm(DVDiaEdu~Mindtypes + ERSH + Mindtypes:ERSH, data = datPro, weights = MindWts)
+summary(ModelERSH1) #n.s.
+
+#Social & Physical Activities
+ModelERSH2 <- lm(DVSocPhy~Mindtypes + ERSH + Mindtypes:ERSH, data = datPro, weights = MindWts)
+summary(ModelERSH2) #n.s.
+
+#Social Media
+ModelERSH3 <- lm(DVMedia~Mindtypes + ERSH + Mindtypes:ERSH, data = datPro, weights = MindWts)
+summary(ModelERSH3) #n.s.
+
+#Total Activities
+ModelERSH4 <- lm(DVTotal~Mindtypes + ERSH + Mindtypes:ERSH, data = datPro, weights = MindWts)
+summary(ModelERSH4) #n.s.
+
+
+####ERAD Anti-Dominant######
+
+#Dialogue & Education
+ModelERAD1 <- lm(DVDiaEdu~Mindtypes + ERAD + Mindtypes:ERAD, data = datPro, weights = MindWts)
+summary(ModelERAD1) #slightly significant
+
+#Create interaction plot
+ggplot(datPro, aes(x = ERAD,
+                   y = DVDiaEdu,
+                   color = Mindtypes), weights = MindWts) +
+  theme_bw() +
+  labs(x = "Anti-Dominant",
+       y = "Dialogue & Education",
+       color = "Mindtypes") +
+  geom_smooth(method = "lm", se = F)
+
+#Social & Physical Activities
+ModelERAD2 <- lm(DVSocPhy~Mindtypes + ERAD + Mindtypes:ERAD, data = datPro, weights = MindWts)
+summary(ModelERAD2) #n.s.
+
+#Social Media
+ModelERAD3 <- lm(DVMedia~Mindtypes + ERAD + Mindtypes:ERAD, data = datPro, weights = MindWts)
+summary(ModelERAD3) #n.s.
+
+#Total Activities
+ModelERAD4 <- lm(DVTotal~Mindtypes + ERAD + Mindtypes:ERAD, data = datPro, weights = MindWts)
+summary(ModelERAD4) #n.s.
+
+
+####ERET Ethnocentricity######
+
+#Dialogue & Education
+ModelERET1 <- lm(DVDiaEdu~Mindtypes + ERET + Mindtypes:ERET, data = datPro, weights = MindWts)
+summary(ModelERET1) #not significant
+
+#Social & Physical Activities
+ModelERET2 <- lm(DVSocPhy~Mindtypes + ERET + Mindtypes:ERET, data = datPro, weights = MindWts)
+summary(ModelERET2) #n.s.
+
+#Social Media
+ModelERET3 <- lm(DVMedia~Mindtypes + ERET + Mindtypes:ERET, data = datPro, weights = MindWts)
+summary(ModelERET3) #n.s.
+
+#Total Activities
+ModelERET4 <- lm(DVTotal~Mindtypes + ERET + Mindtypes:ERET, data = datPro, weights = MindWts)
+summary(ModelERET4) #n.s.
+
+
+####ERMI Multiculturalist Inclusive######
+
+#Dialogue & Education
+ModelERMI1 <- lm(DVDiaEdu~Mindtypes + ERMI + Mindtypes:ERMI, data = datPro, weights = MindWts)
+summary(ModelERMI1) #not significant
+
+#Social & Physical Activities
+ModelERMI2 <- lm(DVSocPhy~Mindtypes + ERMI + Mindtypes:ERMI, data = datPro, weights = MindWts)
+summary(ModelERMI2) #n.s.
+
+#Social Media
+ModelERMI3 <- lm(DVMedia~Mindtypes + ERMI + Mindtypes:ERMI, data = datPro, weights = MindWts)
+summary(ModelERMI3) #n.s.
+
+#Total Activities
+ModelERMI4 <- lm(DVTotal~Mindtypes + ERMI + Mindtypes:ERMI, data = datPro, weights = MindWts)
+summary(ModelERMI4) #n.s.
+
+
+####ERERS Ethnic Racial Salience######
+
+#Dialogue & Education
+ModelERERS1 <- lm(DVDiaEdu~Mindtypes + ERERS + Mindtypes:ERERS, data = datPro, weights = MindWts)
+summary(ModelERERS1) #not significant
+
+#Social & Physical Activities
+ModelERERS2 <- lm(DVSocPhy~Mindtypes + ERERS + Mindtypes:ERERS, data = datPro, weights = MindWts)
+summary(ModelERERS2) #n.s.
+
+#Social Media
+ModelERERS3 <- lm(DVMedia~Mindtypes + ERERS + Mindtypes:ERERS, data = datPro, weights = MindWts)
+summary(ModelERERS3) #n.s.
+
+#Total Activities
+ModelERERS4 <- lm(DVTotal~Mindtypes + ERERS + Mindtypes:ERERS, data = datPro, weights = MindWts)
+summary(ModelERERS4) #n.s.
+
+
+
+
+###***********Prevention*************###
+
+
+####ERAM Assimilation######
+
+#Dialogue & Education
+ModelERAM11 <- lm(DVDiaEdu~Mindtypes + ERAM + Mindtypes:ERAM, data = datPre, weights = MindWts)
+summary(ModelERAM11) #n.s.
+
+#Social & Physical Activities
+ModelERAM21 <- lm(DVSocPhy~Mindtypes + ERAM + Mindtypes:ERAM, data = datPre, weights = MindWts)
+summary(ModelERAM21) #n.s.
+
+#Social Media
+ModelERAM31 <- lm(DVMedia~Mindtypes + ERAM + Mindtypes:ERAM, data = datPre, weights = MindWts)
+summary(ModelERAM31) #n.s.
+
+#Total Activities
+ModelERAM41 <- lm(DVTotal~Mindtypes + ERAM + Mindtypes:ERAM, data = datPre, weights = MindWts)
+summary(ModelERAM41) #n.s.
+
+
+####ERMD Miseducation######
+
+#Dialogue & Education
+ModelERMD11 <- lm(DVDiaEdu~Mindtypes + ERMD + Mindtypes:ERMD, data = datPre, weights = MindWts)
+summary(ModelERMD11) #n.s.
+
+#Social & Physical Activities
+ModelERMD21 <- lm(DVSocPhy~Mindtypes + ERMD + Mindtypes:ERMD, data = datPre, weights = MindWts)
+summary(ModelERMD21) #n.s.
+
+#Social Media
+ModelERMD31 <- lm(DVMedia~Mindtypes + ERMD + Mindtypes:ERMD, data = datPre, weights = MindWts)
+summary(ModelERMD31) #n.s.
+
+#Total Activities
+ModelERMD41 <- lm(DVTotal~Mindtypes + ERMD + Mindtypes:ERMD, data = datPre, weights = MindWts)
+summary(ModelERMD41) #n.s.
+
+
+####ERSH Self-Hatred######
+
+#Dialogue & Education
+ModelERSH11 <- lm(DVDiaEdu~Mindtypes + ERSH + Mindtypes:ERSH, data = datPre, weights = MindWts)
+summary(ModelERSH11) #n.s.
+
+#Social & Physical Activities
+ModelERSH21 <- lm(DVSocPhy~Mindtypes + ERSH + Mindtypes:ERSH, data = datPre, weights = MindWts)
+summary(ModelERSH21) #n.s.
+
+#Social Media
+ModelERSH31 <- lm(DVMedia~Mindtypes + ERSH + Mindtypes:ERSH, data = datPre, weights = MindWts)
+summary(ModelERSH31) #n.s.
+
+#Total Activities
+ModelERSH41 <- lm(DVTotal~Mindtypes + ERSH + Mindtypes:ERSH, data = datPre, weights = MindWts)
+summary(ModelERSH41) #n.s.
+
+
+####ERAD Anti-Dominant######
+
+#Dialogue & Education
+ModelERAD11 <- lm(DVDiaEdu~Mindtypes + ERAD + Mindtypes:ERAD, data = datPre, weights = MindWts)
+summary(ModelERAD11) #ns
+
+#Social & Physical Activities
+ModelERAD21 <- lm(DVSocPhy~Mindtypes + ERAD + Mindtypes:ERAD, data = datPre, weights = MindWts)
+summary(ModelERAD21) #slightly significant
+
+#Create interaction plot
+ggplot(datPre, aes(x = ERAD,
+                   y = DVSocPhy,
+                   color = Mindtypes), weights = MindWts) +
+  theme_bw() +
+  labs(x = "Anti-Dominant",
+       y = "Social & Physical",
+       color = "Mindtypes") +
+  geom_smooth(method = "lm", se = F)
+
+#Social Media
+ModelERAD31 <- lm(DVMedia~Mindtypes + ERAD + Mindtypes:ERAD, data = datPre, weights = MindWts)
+summary(ModelERAD31) #n.s.
+
+#Total Activities
+ModelERAD41 <- lm(DVTotal~Mindtypes + ERAD + Mindtypes:ERAD, data = datPre, weights = MindWts)
+summary(ModelERAD41) #n.s.
+
+
+####ERET Ethnocentricity######
+
+#Dialogue & Education
+ModelERET11 <- lm(DVDiaEdu~Mindtypes + ERET + Mindtypes:ERET, data = datPre, weights = MindWts)
+summary(ModelERET11) #not significant
+
+#Social & Physical Activities
+ModelERET21 <- lm(DVSocPhy~Mindtypes + ERET + Mindtypes:ERET, data = datPre, weights = MindWts)
+summary(ModelERET21) #significant at the .04 level
+
+#Create interaction plot
+ggplot(datPre, aes(x = ERET,
+                   y = DVSocPhy,
+                   color = Mindtypes), weights = MindWts) +
+  theme_bw() +
+  labs(x = "Ethnocentricity",
+       y = "Social & Physical",
+       color = "Mindtypes") +
+  geom_smooth(method = "lm", se = F)
+
+
+#Social Media
+ModelERET31 <- lm(DVMedia~Mindtypes + ERET + Mindtypes:ERET, data = datPre, weights = MindWts)
+summary(ModelERET31) #n.s.
+
+#Total Activities
+ModelERET41 <- lm(DVTotal~Mindtypes + ERET + Mindtypes:ERET, data = datPre, weights = MindWts)
+summary(ModelERET41) #n.s.
+
+
+####ERMI Multiculturalist Inclusive######
+
+#Dialogue & Education
+ModelERMI11 <- lm(DVDiaEdu~Mindtypes + ERMI + Mindtypes:ERMI, data = datPre, weights = MindWts)
+summary(ModelERMI11) #significant at the p <.05 level
+
+#Create interaction plot
+ggplot(datPre, aes(x = ERMI,
+                   y = DVDiaEdu,
+                   color = Mindtypes), weights = MindWts) +
+  theme_bw() +
+  labs(x = "Multiculturalist Inclusive",
+       y = "Dialogue & Education",
+       color = "Mindtypes") +
+  geom_smooth(method = "lm", se = F)
+
+#Social & Physical Activities
+ModelERMI21 <- lm(DVSocPhy~Mindtypes + ERMI + Mindtypes:ERMI, data = datPre, weights = MindWts)
+summary(ModelERMI21) #significant 
+
+#Create interaction plot
+ggplot(datPre, aes(x = ERMI,
+                   y = DVSocPhy,
+                   color = Mindtypes), weights = MindWts) +
+  theme_bw() +
+  labs(x = "Multiculturalist Inclusive",
+       y = "Social & Physical Activities",
+       color = "Mindtypes") +
+  geom_smooth(method = "lm", se = F)
+
+#Social Media
+ModelERMI31 <- lm(DVMedia~Mindtypes + ERMI + Mindtypes:ERMI, data = datPre, weights = MindWts)
+summary(ModelERMI31) #significant at the .2 level
+
+#Create interaction plot
+ggplot(datPre, aes(x = ERMI,
+                   y = DVMedia,
+                   color = Mindtypes), weights = MindWts) +
+  theme_bw() +
+  labs(x = "Multiculturalist Inclusive",
+       y = "Social Media Activities",
+       color = "Mindtypes") +
+  geom_smooth(method = "lm", se = F)
+
+#Total Activities
+ModelERMI41 <- lm(DVTotal~Mindtypes + ERMI + Mindtypes:ERMI, data = datPre, weights = MindWts)
+summary(ModelERMI41) #significant
+
+
+####ERERS Ethnic Racial Salience######
+
+#Dialogue & Education
+ModelERERS11 <- lm(DVDiaEdu~Mindtypes + ERERS + Mindtypes:ERERS, data = datPre, weights = MindWts)
+summary(ModelERERS11) #not significant
+
+#Social & Physical Activities
+ModelERERS21 <- lm(DVSocPhy~Mindtypes + ERERS + Mindtypes:ERERS, data = datPre, weights = MindWts)
+summary(ModelERERS21) #slightly significant
+
+#Create interaction plot
+ggplot(datPre, aes(x = ERERS,
+                   y = DVSocPhy,
+                   color = Mindtypes), weights = MindWts) +
+  theme_bw() +
+  labs(x = "Ethnic-Racial Salience",
+       y = "Social & Physical Activities",
+       color = "Mindtypes") +
+  geom_smooth(method = "lm", se = F)
+
+#Social Media
+ModelERERS31 <- lm(DVMedia~Mindtypes + ERERS + Mindtypes:ERERS, data = datPre, weights = MindWts)
+summary(ModelERERS31) #n.s.
+
+#Total Activities
+ModelERERS41 <- lm(DVTotal~Mindtypes + ERERS + Mindtypes:ERERS, data = datPre, weights = MindWts)
+summary(ModelERERS41) #n.s.
+
+```
+
+
+# Intersectionality - Two Way ANOVA
+
+```{r}
+
+#Filter only participants who Identified as Republican, Democrat, or Independent
+dat4 <- filter(dat2, PoliGroup == 1 | PoliGroup == 2 | PoliGroup == 3)
+
+
+
+#Run racial groups & politics
+##### Racial Groups x Politics -> ERAM (Assimilation)
+lmERAM <- lm(ERAM~RaceGroup*PoliGroup, data = dat4)
+summary(lmERAM)
+#n.s.
+#No interaction here
+
+
+##### Racial Groups x Politics -> ERMD (Miseducation)
+lmERMD <- lm(ERMD~RaceGroup*PoliGroup, data = dat4)
+summary(lmERMD)
+#Significant
+#interaction plot
+emmERMD <- emmeans(object = lmERMD,
+                   specs = ~RaceGroup:PoliGroup)
+emmip(object = emmERMD,
+      formula = RaceGroup~PoliGroup,
+      CIs = TRUE)
+
+##### ERSH (Self-Hatred)
+lmERSH <- lm(ERSH~RaceGroup*PoliGroup, data = dat4)
+summary(lmERSH)
+#significant
+
+#interaction plot
+emmERSH <- emmeans(object = lmERSH,
+                   specs = ~RaceGroup:PoliGroup)
+emmip(object = emmERSH,
+      formula = RaceGroup~PoliGroup,
+      CIs = TRUE)
+
+##### ERAD (Anti-Dominant)
+lmERAD <- lm(ERAD~RaceGroup*PoliGroup, data = dat4)
+summary(lmERAD)
+#n.s.
+
+#####ERET (Ethnocentricity)
+lmERET <- lm(ERET~RaceGroup*PoliGroup, data = dat4)
+summary(lmERET)
+#n.s.
+
+##### ERMI (Multiculturalist Perspective)
+lmERMI <- lm(ERMI~RaceGroup*PoliGroup, data = dat4)
+summary(lmERMI)
+#n.s.
+
+
+##### ERERS (Ethnic-Racial Salience)
+lmERERS <- lm(ERERS~RaceGroup*PoliGroup, data = dat4)
+summary(lmERERS)
+#n.s.
+
+
+####Promotion Mindtypes
+lmPro <- lm(ProCont~RaceGroup*PoliGroup, data = dat4)
+summary(lmPro)
+#slightly significant?
+
+#interaction plot
+emmPro <- emmeans(object = lmPro,
+                   specs = ~RaceGroup:PoliGroup)
+emmip(object = emmPro,
+      formula = RaceGroup~PoliGroup,
+      CIs = TRUE)
+
+#the standard error range is too wide, but still might be interesting
+
+####Promotion Mindtypes
+lmPro2 <- lm(ProDich~RaceGroup*PoliGroup, data = dat4)
+summary(lmPro2)
+
+####Prevention Mindtypes
+lmPre <- lm(PreCont~RaceGroup*PoliGroup, data = dat4)
+summary(lmPre)
+#n.s.
+
+####Prevention Mindtypes
+lmPre2 <- lm(PreDich~RaceGroup*PoliGroup, data = dat4)
+summary(lmPre2)
+#n.s.
+
+####Dialogue & Education Activities
+lmDiaEdu <- lm(DVDiaEdu~RaceGroup*PoliGroup, data = dat4)
+summary(lmDiaEdu)
+#significant
+
+#interaction plot
+emmDiaEdu <- emmeans(object = lmDiaEdu,
+                  specs = ~RaceGroup:PoliGroup)
+emmip(object = emmDiaEdu,
+      formula = RaceGroup~PoliGroup,
+      CIs = TRUE)
+
+####Social & Physical Activities
+lmSocPhy <- lm(DVSocPhy~RaceGroup*PoliGroup, data = dat4)
+summary(lmSocPhy)
+#significant
+
+#interaction plot
+emmSocPhy <- emmeans(object = lmSocPhy,
+                     specs = ~RaceGroup:PoliGroup)
+emmip(object = emmSocPhy,
+      formula = RaceGroup~PoliGroup,
+      CIs = TRUE)
+
+
+####Social Media Activities
+lmMedia <- lm(DVMedia~RaceGroup*PoliGroup, data = dat4)
+summary(lmMedia)
+#not significant
+
+####Total Activities
+lmTotal <- lm(DVTotal~RaceGroup*PoliGroup, data = dat4)
+summary(lmTotal)
+#significant
+
+#interaction plot
+emmTotal <- emmeans(object = lmTotal,
+                     specs = ~RaceGroup:PoliGroup)
+emmip(object = emmTotal,
+      formula = RaceGroup~PoliGroup,
+      CIs = TRUE)
+
+```
+
+
+

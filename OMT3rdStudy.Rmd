@@ -7,9 +7,10 @@ output:
     toc: TRUE
 ---
 
-```{r setup, include=FALSE}
+```{r setup}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(dev = 'svg')
 
 library(dplyr)
@@ -19,19 +20,33 @@ library(RColorBrewer)
 library(ggcorrplot)
 library(plotly)
 library(haven)
+library(ggrepel)
+library(lavaan)
+library(ltm)
+
+#EFA
+library(psych)
+library(car)
+library(corrplot)
 ```
 
+```{r APA formatting}
+library(jtools)
+#if add theme_apa() to graphs, will make it into APA format
+library(showtext)
+font_add_google("Lato", family = "lato")
+```
+
+
 ```{r data import}
-predatraw <- read.csv("/Users/lanphan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Prevention_December+16,+2022_13.36.csv", na.strings = "")
+predatraw <- read.csv("/Users/lan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Prevention_December+16,+2022_13.36.csv", na.strings = "")
 predatraw <- predatraw[-c(1,2),] #remove question labels
-prodatraw <- read.csv("/Users/lanphan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Promotion_December+16,+2022_13.37.csv", na.strings = "")
+prodatraw <- read.csv("/Users/lan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Promotion_December+16,+2022_13.37.csv", na.strings = "")
 prodatraw <- prodatraw[-c(1,2),]
 
-predatquant <- read_sav("/Users/lanphan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Prevention_December+16,+2022_13.30.sav")
+predatquant <- read_sav("/Users/lan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Prevention_December+16,+2022_13.30.sav")
 
-prodatquant <- read_sav("/Users/lanphan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Promotion_December+16,+2022_13.27.sav")
-
-
+prodatquant <- read_sav("/Users/lan/Desktop/Academics/PhD Research/U.S. RDE/Resonance:OMT Version/3rd Study/3rd+Resonance+RDE+Promotion_December+16,+2022_13.27.sav")
 
 ```
 
@@ -56,7 +71,7 @@ alldatquant <- alldatquant %>%
          RaceGroup = ifelse(RaceGroup > 3, NA, RaceGroup))
 
 racedat <- alldatquant %>%
-  select(ResponseId, RaceGroup)
+  dplyr::select(ResponseId, RaceGroup)
 
 prodat <- prodatraw %>%
   mutate(Condition = 1)
@@ -115,20 +130,35 @@ predat <- alldat %>%
   filter(Condition == 2)
 ```
 
-# CFA
+# Descriptives
+```{r}
+summary(alldat$Gender)
+summary(alldat$Politics)
+```
+
+
+# Dimension Reduction
+
+## Confirmatory Factor Analysis
+**Promotion & Prevention Scale**
 ```{r CFA mindtypes}
-library(lavaan)
 
 #correlated two factor solution, marker method
 mindtypes <- 'promotion = ~Q5 + Q6 + Q8
-prevention = ~Q11 + Q12 + Q13'
+prevention = ~Q11 + Q12 + Q13
+assessment = ~Q18 + Q19 + Q20
+locomotion = ~Q15 + Q16 + Q17'
 twofac <- cfa(mindtypes, data = alldat, std.lv=TRUE)
-summary(twofac, fit.measures=TRUE, standardize = TRUE)
+summary(twofac, fit.measures=TRUE, standardized = TRUE)
 # Model Chi-square is .13
 #CFI = .99, indicating very good fit; similarly, TLI = .99
 #P-value for RMSEA <= .05 is not significant, indicating a close fitting model
+
+#get the factor loadings
+inspect(twofac, what="std")$lambda
 ```
 
+**Locomotion & Assessment Scale**
 ```{r CFA locomotion}
 #correlated two factor solution, marker method
 locomotion <- 'assessment = ~Q18 + Q19 + Q20
@@ -140,6 +170,7 @@ summary(twofacloco, fit.measures=TRUE, standardize = TRUE)
 #P-value for RMSEA <= .05 is not significant, indicating a close fitting model
 ```
 
+**Self-Hatred & Multiculturalist Inclusive Scales**
 ```{r CFA for cross-ethnic scale}
 identity <- 'self_hatred = ~Q62 + Q63 + Q64 + Q65
 multicultural_inclusive = ~Q66 + Q67 + Q68 + Q69'
@@ -149,30 +180,35 @@ summary(twofacidentity, fit.measures = TRUE, standardize = TRUE)
 ```
 
 
-Because we also did experimental conditions for the activities, it is better to split the data
-```{r CFA for bbe promotion}
+**Fitting for BB activities**
+```{r CFA for bbe promotion1}
 
 #correlated four factor solution, marker method
 bbe <- 'assessment_political = ~Q21 + Q22 + Q23 + Q24 + Q25 + Q26
 locomotion_political = ~Q27 + Q28 + Q29 + Q30 + Q31 + Q32
 assessment_community = ~Q33 + Q34 + Q35 + Q36 + Q37 + Q38
 locomotion_community = ~Q39 + Q40 + Q71 + Q72 + Q73 + Q74'
-profacbbe <- cfa(bbe, data = prodat, std.lv=TRUE)
+profacbbe <- cfa(bbe, data = alldat, std.lv=TRUE)
 summary(profacbbe, fit.measures=TRUE, standardize = TRUE)
 #the fit is not that great
 ```
-```{r CFA for bbe prevention}
+
+```{r CFA for bbe promotion1}
 
 #correlated four factor solution, marker method
-bbe <- 'assessment_political = ~Q21 + Q22 + Q23 + Q24 + Q25 + Q26
+bbe <- 'assessment = ~Q21 + Q22 + Q23 + Q24 + Q25 + Q26 + Q33 + Q34 + Q35 + Q36 + Q37 + Q38
 locomotion_political = ~Q27 + Q28 + Q29 + Q30 + Q31 + Q32
-assessment_community = ~Q33 + Q34 + Q35 + Q36 + Q37 + Q38
 locomotion_community = ~Q39 + Q40 + Q71 + Q72 + Q73 + Q74'
-prefacbbe <- cfa(bbe, data = predat, std.lv=TRUE)
-summary(prefacbbe, fit.measures=TRUE, standardize = TRUE)
+profacbbe <- cfa(bbe, data = alldat, std.lv=TRUE)
+summary(profacbbe, fit.measures=TRUE, standardize = TRUE)
 #the fit is not that great
+
+inspect(profacbbe, what="std")$lambda
+
 ```
-```{r CFA for bbe prevention}
+
+
+```{r CFA for bbe prevention1, echo=TRUE, eval = FALSE}
 
 #correlated two factor solution, marker method
 bbe2 <- 'assessment = ~Q21 + Q22 + Q23 + Q24 + Q25 + Q26 + Q33 + Q34 + Q35 + Q36 + Q37 + Q38
@@ -182,7 +218,7 @@ summary(prefacbbe2, fit.measures=TRUE, standardize = TRUE)
 #the fit is even worse when dividing into 4 
 ```
 
-```{r CFA for bbe promotion}
+```{r CFA for bbe promotion2, echo=TRUE, eval = FALSE}
 
 #correlated two factor solution, marker method
 bbe3 <- 'political = ~Q21 + Q22 + Q23 + Q24 + Q25 + Q26 + Q27 + Q28 + Q29 + Q30 + Q31 + Q32
@@ -193,18 +229,165 @@ summary(prefacbbe3, fit.measures=TRUE, standardize = TRUE)
 ```
 
 ## New Grouping Variables from CFA
-```{r}
+```{r, echo= TRUE}
 newdat <- alldat %>%
   mutate(promotion = (Q5 + Q6 + Q8)/3,
          prevention = (Q11 + Q12 + Q13)/3,
          assessment = (Q18 + Q19 + Q20)/3,
-         locomotion = (Q15 + Q16 + Q17)/3)
+         locomotion = (Q15 + Q16 + Q17)/3,
+         self_hatred = (Q62 + Q63 + Q64 + Q65)/4,
+         multiculture_inclusive = (Q66 + Q67 + Q68 + Q69)/4)
 ```
+
+
+
+## Exploratory Factor Analysis
+Code from: https://towardsdatascience.com/exploratory-factor-analysis-in-r-e31b0015f224
+```{r EFA packages}
+library(psych)
+library(car)
+library(corrplot)
+describe(newdat) #describe is more comprehensive than summary
+```
+### Assumptions Test
+
+**Correlation Matrix**
+```{r EFA corr, fig.showtext=TRUE}
+efamatrix <- cor(newdat[,c(32:55)])
+corrplot(efamatrix, method = "number")
+```
+**Factorability of the Data**
+```{r}
+X <- newdat[,c(32:55)]
+
+##using KMO to measure sampling adequacy
+KMO(r=cor(X))
+```
+According to Kaiser’s (1974) guidelines, a suggested cutoff for determining the factorability of the sample data is KMO ≥ 60. The total KMO is 0.96, indicating that, based on this test, we can probably conduct a factor analysis.
+```{r Bartlett}
+cortest.bartlett(X)
+```
+Small values of significance (p <.001) indicate that a factor analysis maybe useful with our data
+```{r determinant}
+det(cor(X))
+```
+A positive determinant means that the factor analysis will probably run
+
+### Number of Factors to Extract
+Scree plot
+
+```{r scree plot, fig.showtext=TRUE}
+fafitfree <- fa(newdat[,c(32:55)], nfactors = ncol(X), rotate = "none")
+n_factors <- length(fafitfree$e.values)
+scree <- data.frame(
+  Factor_n = as.factor(1:n_factors),
+  Eigenvalue = fafitfree$e.values)
+ggplot(scree, aes(x = Factor_n, y = Eigenvalue, group = 1)) + 
+  geom_point() + geom_line() +
+  xlab("Number of factors") +
+  ylab("Initial eigenvalue") +
+  labs(title = "Scree Plot", 
+      subtitle = "(Based on the unreduced correlation matrix)") +
+  theme_bw()
+```
+Seems like 2 or 3 factors
+```{r parallel analysis, fig.showtext=TRUE}
+parallel <- fa.parallel(X)
+```
+```{r EFA with principal axis factoring}
+fa.none <- fa(r=X, 
+ nfactors = 3, 
+ # covar = FALSE, SMC = TRUE,
+ fm= "pa", # type of factor analysis we want to use (“pa” is principal axis factoring)
+ max.iter=100, # (50 is the default, but we have changed it to 100
+ rotate = "varimax") # varimax rotation
+print(fa.none)
+```
+```{r graph factor loading matrices, fig.showtext=TRUE}
+fa.diagram(fa.none)
+```
+```{r alpha reliability}
+#library(ltm)
+newdat %>%
+  dplyr::select(Q22, Q25, Q37, Q36, Q35, Q26, Q33, Q23, Q21, Q34, Q38) %>%
+  cronbach.alpha(CI = TRUE) #.95 is good
+
+newdat %>%
+  dplyr::select(Q28, Q30, Q32, Q27, Q29, Q24) %>%
+  cronbach.alpha(CI = TRUE) #.89 is pretty good
+#similar to loco_politic except Q24
+#if remove lowest loading Q24, alpha moves up to .892, not significant
+#but will remove to be consistent with theoretical model
+
+newdat %>%
+  dplyr::select(Q40, Q73, Q39, Q74, Q71, Q72, Q31) %>%
+  cronbach.alpha(CI = TRUE) #almost .90, pretty great; removing lowest item is the same
+#literally loco_comm with addition of Q31; remove Q31 to be consistent
+
+newdat %>%
+  dplyr::select(Q40, Q73, Q39, Q74, Q71, Q72) %>%
+  cronbach.alpha(CI = TRUE)
+
+newdat %>%
+  dplyr::select(Q5, Q6, Q8) %>%
+  cronbach.alpha(CI = TRUE)
+
+newdat %>%
+  dplyr::select(Q11, Q12, Q13) %>%
+  cronbach.alpha(CI = TRUE)
+
+#locomotion
+newdat %>%
+  dplyr::select(Q15, Q16, Q17) %>%
+  cronbach.alpha(CI = TRUE)
+
+#assessment
+newdat %>%
+  dplyr::select(Q18, Q19, Q20) %>%
+  cronbach.alpha(CI = TRUE)
+```
+
+
+### New Factors after EFA
+Interestingly enough, EFA items mapped on well with our activity categories (locomotion-assessment) and (political-community for locomotion) activities.
+```{r, echo = TRUE}
+newdat <- newdat %>%
+  mutate(DVassess_politic = (Q21 + Q22 + Q23 + Q24 + Q25 + Q26)/6,
+         DVloco_politic = (Q27 + Q28 + Q29 + Q30 + Q32)/5, #also EFA 2
+         DVassess_comm = (Q33 + Q34 + Q35 + Q36 + Q37 + Q38)/6,
+         DVloco_comm = (Q39 + Q40 + Q71 + Q72 + Q73 + Q74)/6, #also EFA 3
+         DVassessment = (Q22+ Q25 + Q37 + Q36 + Q35 + Q26 + Q33 + Q23 + Q21 + Q34+ Q38)/11,
+         DVtotal = (Q21 + Q22 + Q23 + Q24 + Q25 + Q26 + Q27 + Q28 + Q29 + Q30 + Q31 + Q32 + Q33 + Q34 + Q35 + Q36 + Q37 + Q38 + Q39 + Q40 + Q71 + Q72 + Q73 + Q74)/24) # assessment from efa1
+
+```
+Setting Factor Levels
+```{r}
+# Make factor variables
+newdat$Gender <- factor(newdat$Gender,
+                        levels = c(c("Male", "Female", "Non-binary", "Transgender", 
+                                     "Other", "Prefer not to say")))
+newdat$Politics <- factor(newdat$Politics,
+                          levels =  c("Democrat", "Independent", "Republican", 
+                                      "Other (please elaborate", "Prefer not to answer"))
+newdat$Condition <- factor(newdat$Condition,
+                        levels = c(1,2),
+                        labels = c("PromotionF", "PreventionF"))
+```
+
+```{r Descriptive stats}
+describe(newdat[,c(67:89)])
+```
+
+```{r}
+Anova(lm(DVloco_politic~Politics, data = newdat), type = 3)
+by(newdat$DVassessment, newdat$Gender, sd, na.rm = TRUE)
+```
+
 
 # Data Visualization
 
 ## Heatmap
-```{r}
+```{r heatmap1, fig.showtext=TRUE, eval = FALSE}
 library(ComplexHeatmap)
 library(circlize)
 library(hopach)
@@ -215,7 +398,7 @@ best_col <- colorRamp2(c(-2, 0, 2), c("#82A3FF", "grey", "#8B2E2E"))
 #only use the original items and not the average of mindtypes
 #turn into z-scores
 newdathm <- newdat %>%
-  select(Gender, RaceGroup, Politics, Q5, Q6, Q8, Q11, Q12, Q13, Q18, Q19, Q20, Q15, Q16, Q17, promotion, prevention, locomotion, assessment)
+  dplyr::select(Gender, RaceGroup, Politics, Q5, Q6, Q8, Q11, Q12, Q13, Q18, Q19, Q20, Q15, Q16, Q17, promotion, prevention, locomotion, assessment, self_hatred, multiculture_inclusive)
 
 hmscale <- scale(newdathm[,c(4:15)])
 
@@ -247,9 +430,10 @@ Heatmap(hmscale, name = "Mindtype",
                                   "Democrat" = "blue", "Other (please elaborate)" = "grey", 
                                   "Prefer not to answer" = "grey")),
                    width = unit(0.5,"cm"))
+```
 
-
-hmscale2 <- scale(newdathm[,c(16:19)])
+```{r heatmap2, fig.showtext=TRUE, eval = FALSE}
+hmscale2 <- scale(newdathm[,c(16:21)])
 
 #Heatmap with uncentered correlation & clustering with average linkage
 
@@ -277,3 +461,1531 @@ Heatmap(hmscale2, name = "Mindtype",
 
 ```
 
+## Group Differences
+```{r connected dot plot}
+col_fourdot <- c("#E69F00", "#0072B2", "#E6E6FA", "#A0DB8E", "#800000")
+```
+
+Also make functions to draw dot plots easier
+
+```{r function}
+#connected dot plot time! but also need to create a data set that works for it first
+# variables I'd need: the name of the items as factor, Racial groups, number of each group, the mean 
+#let's try making a function for plotting this
+
+func_dotplot <- function(df, mapping, vect1, vect2){
+  dat1 <- filter(df, Item %in% vect1)
+  ggplot(data = dat1, mapping = mapping) +
+  scale_fill_manual(values = col_fourdot) +
+  geom_line(data = subset(dat1, Item %in% vect2), mapping = aes(group = Item), size = .2) +
+  geom_point(aes(size = N), shape = 21, alpha = .7) +
+  scale_size_binned(range = c(2,4)) +
+  #geom_text_repel(data = subset(dat1, Item %in% vect2), mapping = aes(label = round(Mean,2)), size = 4) +
+  theme(legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm')) +
+  ylim(1,6) +
+  labs(x = NULL, y = NULL) +
+  coord_flip() + 
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "bottom", legend.direction = "vertical") 
+}
+
+func_dotplotsmall <- function(df, mapping, vect1, vect2){
+  dat1 <- filter(df, Item %in% vect1)
+  ggplot(data = dat1, mapping = mapping) +
+  scale_fill_manual(values = col_fourdot) +
+  geom_line(data = subset(dat1, Item %in% vect2), mapping = aes(group = Item), size = .2) +
+  geom_point(aes(size = N), shape = 21, alpha = .7) +
+  scale_size_binned(range = c(2,4)) +
+  #geom_text_repel(data = subset(dat1, Item %in% vect2), mapping = aes(label = round(Mean,2)), size = 4) +
+  theme(legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm')) +
+  ylim(1,6) +
+  labs(x = NULL, y = NULL) +
+  coord_flip() + 
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom", legend.direction = "vertical") 
+}
+
+func_dotplotN <- function(df, mapping, vect1, vect2){
+  dat1 <- filter(df, Item %in% vect1)
+  ggplot(data = dat1, mapping = mapping) +
+  scale_fill_manual(values = col_fourdot) +
+  geom_line(data = subset(dat1, Item %in% vect2), mapping = aes(group = Item), size = .2) +
+  geom_point(shape = 21, alpha = .7) +
+  scale_size_binned(range = c(2,4)) +
+  #geom_text_repel(data = subset(dat1, Item %in% vect2), mapping = aes(label = round(Mean,2)), size = 4) +
+  theme(legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm')) +
+  ylim(1,6) +
+  labs(x = NULL, y = NULL) +
+  coord_flip() + 
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom", legend.direction = "vertical") 
+}
+
+```
+
+Make giant data sets to graph later
+
+```{r}
+megaRace <- newdat %>%
+  filter(RaceGroup %in% c("White", "Black", "non-Black POC")) %>%
+  group_by(RaceGroup) %>%
+  dplyr::summarise(N = n(),
+                   "Enhance everyone's health & wellbeing" = mean(Q5, na.rm = TRUE),
+                   "Greater economic prosperity to area" = mean(Q6, na.rm = TRUE),
+                   "Better future for next generation" = mean(Q8, na.rm = TRUE),
+                   "Promotion Average" = mean(promotion, na.rm = TRUE),
+                   "Militant/extreme members make it worse" = mean(Q11, na.rm = TRUE),
+                   "Don't want loved ones to die/be harmed" = mean(Q12, na.rm = TRUE),
+                   "End number of Americans killed/injured" = mean(Q13, na.rm = TRUE),
+                   "Prevention Average" = mean(prevention, na.rm = TRUE),
+                   "Locomotion Average" = mean(locomotion, na.rm = TRUE),
+                   "Assessment Average" = mean(assessment, na.rm = TRUE),
+                   "Multicultural Inclusive" = mean(multiculture_inclusive, na.rm = TRUE),
+                   "Self Hatred" = mean(self_hatred, na.rm = TRUE),
+                   "DV Assessment Activites" = mean(DVassessment, na.rm = TRUE),
+                   "Listen to a debate on racial equity with \n informed speakers from different racial groups" = mean(Q21),
+                   "Listen to a presentation on the history of \n slavery & discrimination of racial groups" = mean(Q22),
+                   "Watch an online training on how to identify \n instances of racial bias and discrimination" = mean(Q23),
+                   "Watch videos of Black Americans sharing \n compelling stories of their experiences of racism" = mean(Q25),
+                   "Listen to a podcast on the histories of \n struggles of diff(erent) races in the U.S" = mean (Q26),
+                   "Listen to members of diff racial groups share \n stories about their favorite memories of growing up" = mean(Q33),
+                   "Watch short videos people of diff race tell \n what they are most proud of in America" = mean(Q34),
+                   "Listen to a multiracial group of American citizens \n discuss how they work together to help their community thrive" = mean(Q35),
+                   "Listen to Black Americans discuss specific ways \n that White Americans can help to address racism and build connections" = mean(Q36),
+                   "Watch a video on how a multiracial coalition came \n together to promote fair access to decent housing in their community" = mean(Q37),
+                   "Listen to a multiracial panel of popular artists \n speak about their visions for a equitable and inclusive America" = mean(Q38),
+                   "DV Locomotion Political Activities" = mean(DVloco_politic),
+                   "Attend a training on how to facilitate workshops \n on identifying and reducing implicit racial bias" = mean(Q27),
+                   "Recruit friends and neighbors to participate in \n a workshop on reducing implicit racial bias" = mean(Q28),
+                   "Participate in a nonviolent march on the need to \n acknowledge past and current racial harms and discrimination" = mean(Q29),
+                   "Share posts on social media on the need to \n address racial discrimination in the U.S." = mean(Q30),
+                   "Help raise donations to support a campaign \n to increase awareness of ongoing racial grievances" = mean(Q32),
+                   "DV Locomotion Community Activities" = mean(DVloco_comm),
+                   "Help organize a community potluck where neighbors \n from different racial/cultural groups share dishes" = mean(Q39),
+                   "Help organize an outdoor hike that matches people \n from different racial groups to get to know each other" = mean(Q40),
+                   "Volunteer at a local garden that provides fresh \n vegetables to a racially diverse low-income community" = mean(Q71),
+                   "Actively participate in activities celebrating \n Cultural Heritage Month in your community"= mean(Q72),
+                   "Recruit others to participate in an online forum for \n sharing photographs of personal objects from their backgrounds" = mean(Q73),
+                   "Help promote an online platform where people share \n stories of meaningful interracial friendships they have enjoyed" = mean(Q74)
+                   ) %>%
+  pivot_longer(c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average",
+                   "Locomotion Average",
+                   "Assessment Average",
+                 "Multicultural Inclusive",
+                   "Self Hatred",
+                   "DV Assessment Activites",
+                   "Listen to a debate on racial equity with \n informed speakers from different racial groups",
+                   "Listen to a presentation on the history of \n slavery & discrimination of racial groups",
+                   "Watch an online training on how to identify \n instances of racial bias and discrimination",
+                   "Watch videos of Black Americans sharing \n compelling stories of their experiences of racism",
+                   "Listen to a podcast on the histories of \n struggles of diff(erent) races in the U.S",
+                   "Listen to members of diff racial groups share \n stories about their favorite memories of growing up",
+                   "Watch short videos people of diff race tell \n what they are most proud of in America",
+                   "Listen to a multiracial group of American citizens \n discuss how they work together to help their community thrive",
+                   "Listen to Black Americans discuss specific ways \n that White Americans can help to address racism and build connections",
+                   "Watch a video on how a multiracial coalition came \n together to promote fair access to decent housing in their community",
+                   "Listen to a multiracial panel of popular artists \n speak about their visions for a equitable and inclusive America",
+                   "DV Locomotion Political Activities",
+                   "Attend a training on how to facilitate workshops \n on identifying and reducing implicit racial bias",
+                   "Recruit friends and neighbors to participate in \n a workshop on reducing implicit racial bias",
+                   "Participate in a nonviolent march on the need to \n acknowledge past and current racial harms and discrimination",
+                   "Share posts on social media on the need to \n address racial discrimination in the U.S.",
+                   "Help raise donations to support a campaign \n to increase awareness of ongoing racial grievances",
+                   "DV Locomotion Community Activities",
+                   "Help organize a community potluck where neighbors \n from different racial/cultural groups share dishes",
+                   "Help organize an outdoor hike that matches people \n from different racial groups to get to know each other",
+                   "Volunteer at a local garden that provides fresh \n vegetables to a racially diverse low-income community",
+                   "Actively participate in activities celebrating \n Cultural Heritage Month in your community",
+                   "Recruit others to participate in an online forum for \n sharing photographs of personal objects from their backgrounds",
+                   "Help promote an online platform where people share \n stories of meaningful interracial friendships they have enjoyed"),
+               names_to = "Item", values_to = "Mean")
+                   
+```
+
+```{r}
+megaPolitics <- newdat %>%
+  filter(Politics %in% c("Democrat", "Independent", "Republican")) %>%
+  group_by(Politics) %>%
+  dplyr::summarise(N = n(),
+                   "Enhance everyone's health & wellbeing" = mean(Q5, na.rm = TRUE),
+                   "Greater economic prosperity to area" = mean(Q6, na.rm = TRUE),
+                   "Better future for next generation" = mean(Q8, na.rm = TRUE),
+                   "Promotion Average" = mean(promotion, na.rm = TRUE),
+                   "Militant/extreme members make it worse" = mean(Q11, na.rm = TRUE),
+                   "Don't want loved ones to die/be harmed" = mean(Q12, na.rm = TRUE),
+                   "End number of Americans killed/injured" = mean(Q13, na.rm = TRUE),
+                   "Prevention Average" = mean(prevention, na.rm = TRUE),
+                   "Locomotion Average" = mean(locomotion, na.rm = TRUE),
+                   "Assessment Average" = mean(assessment, na.rm = TRUE),
+                   "Multicultural Inclusive" = mean(multiculture_inclusive, na.rm = TRUE),
+                   "Self Hatred" = mean(self_hatred, na.rm = TRUE),
+                   "DV Assessment Activites" = mean(DVassessment, na.rm = TRUE),
+                   "Listen to a debate on racial equity with \n informed speakers from different racial groups" = mean(Q21),
+                   "Listen to a presentation on the history of \n slavery & discrimination of racial groups" = mean(Q22),
+                   "Watch an online training on how to identify \n instances of racial bias and discrimination" = mean(Q23),
+                   "Watch videos of Black Americans sharing \n compelling stories of their experiences of racism" = mean(Q25),
+                   "Listen to a podcast on the histories of \n struggles of diff(erent) races in the U.S" = mean (Q26),
+                   "Listen to members of diff racial groups share \n stories about their favorite memories of growing up" = mean(Q33),
+                   "Watch short videos people of diff race tell \n what they are most proud of in America" = mean(Q34),
+                   "Listen to a multiracial group of American citizens \n discuss how they work together to help their community thrive" = mean(Q35),
+                   "Listen to Black Americans discuss specific ways \n that White Americans can help to address racism and build connections" = mean(Q36),
+                   "Watch a video on how a multiracial coalition came \n together to promote fair access to decent housing in their community" = mean(Q37),
+                   "Listen to a multiracial panel of popular artists \n speak about their visions for a equitable and inclusive America" = mean(Q38),
+                   "DV Locomotion Political Activities" = mean(DVloco_politic),
+                   "Attend a training on how to facilitate workshops \n on identifying and reducing implicit racial bias" = mean(Q27),
+                   "Recruit friends and neighbors to participate in \n a workshop on reducing implicit racial bias" = mean(Q28),
+                   "Participate in a nonviolent march on the need to \n acknowledge past and current racial harms and discrimination" = mean(Q29),
+                   "Share posts on social media on the need to \n address racial discrimination in the U.S." = mean(Q30),
+                   "Help raise donations to support a campaign \n to increase awareness of ongoing racial grievances" = mean(Q32),
+                   "DV Locomotion Community Activities" = mean(DVloco_comm),
+                   "Help organize a community potluck where neighbors \n from different racial/cultural groups share dishes" = mean(Q39),
+                   "Help organize an outdoor hike that matches people \n from different racial groups to get to know each other" = mean(Q40),
+                   "Volunteer at a local garden that provides fresh \n vegetables to a racially diverse low-income community" = mean(Q71),
+                   "Actively participate in activities celebrating \n Cultural Heritage Month in your community"= mean(Q72),
+                   "Recruit others to participate in an online forum for \n sharing photographs of personal objects from their backgrounds" = mean(Q73),
+                   "Help promote an online platform where people share \n stories of meaningful interracial friendships they have enjoyed" = mean(Q74)
+                   ) %>%
+  pivot_longer(c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average",
+                   "Locomotion Average",
+                   "Assessment Average",
+                 "Multicultural Inclusive",
+                   "Self Hatred",
+                   "DV Assessment Activites",
+                   "Listen to a debate on racial equity with \n informed speakers from different racial groups",
+                   "Listen to a presentation on the history of \n slavery & discrimination of racial groups",
+                   "Watch an online training on how to identify \n instances of racial bias and discrimination",
+                   "Watch videos of Black Americans sharing \n compelling stories of their experiences of racism",
+                   "Listen to a podcast on the histories of \n struggles of diff(erent) races in the U.S",
+                   "Listen to members of diff racial groups share \n stories about their favorite memories of growing up",
+                   "Watch short videos people of diff race tell \n what they are most proud of in America",
+                   "Listen to a multiracial group of American citizens \n discuss how they work together to help their community thrive",
+                   "Listen to Black Americans discuss specific ways \n that White Americans can help to address racism and build connections",
+                   "Watch a video on how a multiracial coalition came \n together to promote fair access to decent housing in their community",
+                   "Listen to a multiracial panel of popular artists \n speak about their visions for a equitable and inclusive America",
+                   "DV Locomotion Political Activities",
+                   "Attend a training on how to facilitate workshops \n on identifying and reducing implicit racial bias",
+                   "Recruit friends and neighbors to participate in \n a workshop on reducing implicit racial bias",
+                   "Participate in a nonviolent march on the need to \n acknowledge past and current racial harms and discrimination",
+                   "Share posts on social media on the need to \n address racial discrimination in the U.S.",
+                   "Help raise donations to support a campaign \n to increase awareness of ongoing racial grievances",
+                   "DV Locomotion Community Activities",
+                   "Help organize a community potluck where neighbors \n from different racial/cultural groups share dishes",
+                   "Help organize an outdoor hike that matches people \n from different racial groups to get to know each other",
+                   "Volunteer at a local garden that provides fresh \n vegetables to a racially diverse low-income community",
+                   "Actively participate in activities celebrating \n Cultural Heritage Month in your community",
+                   "Recruit others to participate in an online forum for \n sharing photographs of personal objects from their backgrounds",
+                   "Help promote an online platform where people share \n stories of meaningful interracial friendships they have enjoyed"),
+               names_to = "Item", values_to = "Mean")
+                   
+                   
+```
+
+```{r}
+megaGender <- newdat %>%
+  filter(Gender %in% c("Male", "Female")) %>%
+  group_by(Gender) %>%
+  dplyr::summarise(N = n(),
+                   "Enhance everyone's health & wellbeing" = mean(Q5, na.rm = TRUE),
+                   "Greater economic prosperity to area" = mean(Q6, na.rm = TRUE),
+                   "Better future for next generation" = mean(Q8, na.rm = TRUE),
+                   "Promotion Average" = mean(promotion, na.rm = TRUE),
+                   "Militant/extreme members make it worse" = mean(Q11, na.rm = TRUE),
+                   "Don't want loved ones to die/be harmed" = mean(Q12, na.rm = TRUE),
+                   "End number of Americans killed/injured" = mean(Q13, na.rm = TRUE),
+                   "Prevention Average" = mean(prevention, na.rm = TRUE),
+                   "Locomotion Average" = mean(locomotion, na.rm = TRUE),
+                   "Assessment Average" = mean(assessment, na.rm = TRUE),
+                   "Multicultural Inclusive" = mean(multiculture_inclusive, na.rm = TRUE),
+                   "Self Hatred" = mean(self_hatred, na.rm = TRUE),
+                   "DV Assessment Activites" = mean(DVassessment, na.rm = TRUE),
+                   "Listen to a debate on racial equity with \n informed speakers from different racial groups" = mean(Q21),
+                   "Listen to a presentation on the history of \n slavery & discrimination of racial groups" = mean(Q22),
+                   "Watch an online training on how to identify \n instances of racial bias and discrimination" = mean(Q23),
+                   "Watch videos of Black Americans sharing \n compelling stories of their experiences of racism" = mean(Q25),
+                   "Listen to a podcast on the histories of \n struggles of diff(erent) races in the U.S" = mean (Q26),
+                   "Listen to members of diff racial groups share \n stories about their favorite memories of growing up" = mean(Q33),
+                   "Watch short videos people of diff race tell \n what they are most proud of in America" = mean(Q34),
+                   "Listen to a multiracial group of American citizens \n discuss how they work together to help their community thrive" = mean(Q35),
+                   "Listen to Black Americans discuss specific ways \n that White Americans can help to address racism and build connections" = mean(Q36),
+                   "Watch a video on how a multiracial coalition came \n together to promote fair access to decent housing in their community" = mean(Q37),
+                   "Listen to a multiracial panel of popular artists \n speak about their visions for a equitable and inclusive America" = mean(Q38),
+                   "DV Locomotion Political Activities" = mean(DVloco_politic),
+                   "Attend a training on how to facilitate workshops \n on identifying and reducing implicit racial bias" = mean(Q27),
+                   "Recruit friends and neighbors to participate in \n a workshop on reducing implicit racial bias" = mean(Q28),
+                   "Participate in a nonviolent march on the need to \n acknowledge past and current racial harms and discrimination" = mean(Q29),
+                   "Share posts on social media on the need to \n address racial discrimination in the U.S." = mean(Q30),
+                   "Help raise donations to support a campaign \n to increase awareness of ongoing racial grievances" = mean(Q32),
+                   "DV Locomotion Community Activities" = mean(DVloco_comm),
+                   "Help organize a community potluck where neighbors \n from different racial/cultural groups share dishes" = mean(Q39),
+                   "Help organize an outdoor hike that matches people \n from different racial groups to get to know each other" = mean(Q40),
+                   "Volunteer at a local garden that provides fresh \n vegetables to a racially diverse low-income community" = mean(Q71),
+                   "Actively participate in activities celebrating \n Cultural Heritage Month in your community"= mean(Q72),
+                   "Recruit others to participate in an online forum for \n sharing photographs of personal objects from their backgrounds" = mean(Q73),
+                   "Help promote an online platform where people share \n stories of meaningful interracial friendships they have enjoyed" = mean(Q74)
+                   ) %>%
+  pivot_longer(c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average",
+                   "Locomotion Average",
+                   "Assessment Average",
+                 "Multicultural Inclusive",
+                   "Self Hatred",
+                   "DV Assessment Activites",
+                   "Listen to a debate on racial equity with \n informed speakers from different racial groups",
+                   "Listen to a presentation on the history of \n slavery & discrimination of racial groups",
+                   "Watch an online training on how to identify \n instances of racial bias and discrimination",
+                   "Watch videos of Black Americans sharing \n compelling stories of their experiences of racism",
+                   "Listen to a podcast on the histories of \n struggles of diff(erent) races in the U.S",
+                   "Listen to members of diff racial groups share \n stories about their favorite memories of growing up",
+                   "Watch short videos people of diff race tell \n what they are most proud of in America",
+                   "Listen to a multiracial group of American citizens \n discuss how they work together to help their community thrive",
+                   "Listen to Black Americans discuss specific ways \n that White Americans can help to address racism and build connections",
+                   "Watch a video on how a multiracial coalition came \n together to promote fair access to decent housing in their community",
+                   "Listen to a multiracial panel of popular artists \n speak about their visions for a equitable and inclusive America",
+                   "DV Locomotion Political Activities",
+                   "Attend a training on how to facilitate workshops \n on identifying and reducing implicit racial bias",
+                   "Recruit friends and neighbors to participate in \n a workshop on reducing implicit racial bias",
+                   "Participate in a nonviolent march on the need to \n acknowledge past and current racial harms and discrimination",
+                   "Share posts on social media on the need to \n address racial discrimination in the U.S.",
+                   "Help raise donations to support a campaign \n to increase awareness of ongoing racial grievances",
+                   "DV Locomotion Community Activities",
+                   "Help organize a community potluck where neighbors \n from different racial/cultural groups share dishes",
+                   "Help organize an outdoor hike that matches people \n from different racial groups to get to know each other",
+                   "Volunteer at a local garden that provides fresh \n vegetables to a racially diverse low-income community",
+                   "Actively participate in activities celebrating \n Cultural Heritage Month in your community",
+                   "Recruit others to participate in an online forum for \n sharing photographs of personal objects from their backgrounds",
+                   "Help promote an online platform where people share \n stories of meaningful interracial friendships they have enjoyed"),
+               names_to = "Item", values_to = "Mean")
+                   
+                   
+```
+
+### Gender
+
+```{r}
+newdat %>%
+  filter(Gender %in% c("Male", "Female")) %>%
+  dplyr::summarise(
+    dimension = list(t.test(DVassessment~Gender)),
+    item1 = list(t.test(DVloco_politic~Gender)),
+    item2 = list(t.test(DVloco_comm~Gender)),
+    item3 = list(t.test(self_hatred~Gender)),
+    item4 = list(t.test(multiculture_inclusive~Gender))) %>%
+  pull(dimension)
+```
+
+```{r}
+func_dotplotsmall(megaGender, aes(x = factor(Item, levels = rev(unique(Item))), y = Mean, size = N, fill = Gender), c("Multicultural Inclusive", "DV Assessment Activites"), c("Multicultural Inclusive", "DV Assessment Activites"))
+```
+
+### Race
+Run ANOVA first to see for significant differences
+**Mindtypes ANOVA**
+```{r}
+newdat %>%
+  filter(RaceGroup %in% c("White", "Black", "non-Black POC")) %>%
+  group_by(RaceGroup) %>%
+  dplyr::summarise(
+                   item1 = Anova(lm(Q5~RaceGroup, data = newdat), type = 3),
+                   item2 = Anova(lm(Q6~RaceGroup, data = newdat), type = 3),
+                   item3 = Anova(lm(Q8~RaceGroup, data = newdat), type = 3),
+                   item4 = Anova(lm(promotion~RaceGroup, data = newdat), type = 3),
+                   item5 = Anova(lm(Q11~RaceGroup, data = newdat), type = 3),
+                   item6 = Anova(lm(Q12~RaceGroup, data = newdat), type = 3),
+                   item7 = Anova(lm(Q13~RaceGroup, data = newdat), type = 3),
+                   item8 = Anova(lm(prevention~RaceGroup, data = newdat), type = 3),
+                   item9 = Anova(lm(assessment~RaceGroup, data = newdat), type = 3),
+                   item10 = Anova(lm(locomotion~RaceGroup, data = newdat), type = 3),
+                   item11 = Anova(lm(multiculture_inclusive~RaceGroup, data = newdat), type = 3),
+                   
+                   item12 = Anova(lm(self_hatred~RaceGroup, data = newdat), type = 3))  %>%
+  pull(item12)
+#MI and self_hatred kinda significant
+```
+
+```{r}
+func_dotplotsmall(megaRace, aes(x = factor(Item, levels = rev(unique(Item))), y = Mean, size = N, fill = RaceGroup), c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average",
+                   "Locomotion Average",
+                   "Assessment Average",
+                   "Multicultural Inclusive",
+                   "Self Hatred"), c("Multicultural Inclusive",
+                   "Self Hatred"))
+```
+
+**DV1 Assessment Activities**
+
+
+```{r}
+newdat %>%
+  filter(RaceGroup %in% c("White", "Black", "non-Black POC")) %>%
+  group_by(RaceGroup) %>%
+  dplyr::summarise(dimension = Anova(lm(DVassessment~RaceGroup, data = newdat), type = 3),
+                   item1 = Anova(lm(Q21~RaceGroup, data = newdat), type = 3),
+                   item2 = Anova(lm(Q22~RaceGroup, data = newdat), type = 3),
+                   item3 = Anova(lm(Q23~RaceGroup, data = newdat), type = 3),
+                   item4 = Anova(lm(Q25~RaceGroup, data = newdat), type = 3),
+                   item5 = Anova(lm(Q26~RaceGroup, data = newdat), type = 3),
+                   item6 = Anova(lm(Q33~RaceGroup, data = newdat), type = 3),
+                   item7 = Anova(lm(Q34~RaceGroup, data = newdat), type = 3),
+                   item8 = Anova(lm(Q35~RaceGroup, data = newdat), type = 3),
+                   item9 = Anova(lm(Q36~RaceGroup, data = newdat), type = 3),
+                   item10 = Anova(lm(Q37~RaceGroup, data = newdat), type = 3),
+                   item11 = Anova(lm(Q38~RaceGroup, data = newdat), type = 3)
+                   )  %>%
+  pull(item8)
+#all significant except 6,7, and 8
+```
+
+```{r}
+func_dotplotsmall(megaRace, aes(x = factor(Item, levels = rev(unique(Item))), y = Mean, size = N, fill = RaceGroup), c("DV Assessment Activites",
+                   "Listen to a debate on racial equity with \n informed speakers from different racial groups",
+                   "Listen to a presentation on the history of \n slavery & discrimination of racial groups",
+                   "Watch an online training on how to identify \n instances of racial bias and discrimination",
+                   "Watch videos of Black Americans sharing \n compelling stories of their experiences of racism",
+                   "Listen to a podcast on the histories of \n struggles of diff(erent) races in the U.S",
+                   "Listen to members of diff racial groups share \n stories about their favorite memories of growing up",
+                   "Watch short videos people of diff race tell \n what they are most proud of in America",
+                   "Listen to a multiracial group of American citizens \n discuss how they work together to help their community thrive",
+                   "Listen to Black Americans discuss specific ways \n that White Americans can help to address racism and build connections",
+                   "Watch a video on how a multiracial coalition came \n together to promote fair access to decent housing in their community",
+                   "Listen to a multiracial panel of popular artists \n speak about their visions for a equitable and inclusive America"), 
+                  c("DV Assessment Activites",
+                   "Listen to a debate on racial equity with \n informed speakers from different racial groups",
+                   "Listen to a presentation on the history of \n slavery & discrimination of racial groups",
+                   "Watch an online training on how to identify \n instances of racial bias and discrimination",
+                   "Watch videos of Black Americans sharing \n compelling stories of their experiences of racism",
+                   "Listen to a podcast on the histories of \n struggles of diff(erent) races in the U.S",
+                   #"Listen to members of diff racial groups share \n stories about their favorite memories of growing up",
+                   #"Watch short videos people of diff race tell \n what they are most proud of in America",
+                   #"Listen to a multiracial group of American citizens \n discuss how they work together to help their community thrive",
+                   "Listen to Black Americans discuss specific ways \n that White Americans can help to address racism and build connections",
+                   "Watch a video on how a multiracial coalition came \n together to promote fair access to decent housing in their community",
+                   "Listen to a multiracial panel of popular artists \n speak about their visions for a equitable and inclusive America"))
+```
+
+**DV2 Locomotion Political Activities**
+```{r}
+newdat %>%
+  filter(RaceGroup %in% c("White", "Black", "non-Black POC")) %>%
+  group_by(RaceGroup) %>%
+  dplyr::summarise(dimension = Anova(lm(DVloco_politic~RaceGroup, data = newdat), type = 3),
+                   item1 = Anova(lm(Q27~RaceGroup, data = newdat), type = 3),
+                   item2 = Anova(lm(Q28~RaceGroup, data = newdat), type = 3),
+                   item3 = Anova(lm(Q29~RaceGroup, data = newdat), type = 3),
+                   item4 = Anova(lm(Q30~RaceGroup, data = newdat), type = 3),
+                   item5 = Anova(lm(Q32~RaceGroup, data = newdat), type = 3)
+                   )  %>%
+  pull(item5)
+#all significant
+```
+```{r}
+
+func_dotplotsmall(megaRace, aes(x = factor(Item, levels = rev(unique(Item))), y = Mean, size = N, fill = RaceGroup), c("DV Locomotion Political Activities",
+                   "Attend a training on how to facilitate workshops \n on identifying and reducing implicit racial bias",
+                   "Recruit friends and neighbors to participate in \n a workshop on reducing implicit racial bias",
+                   "Participate in a nonviolent march on the need to \n acknowledge past and current racial harms and discrimination",
+                   "Share posts on social media on the need to \n address racial discrimination in the U.S.",
+                   "Help raise donations to support a campaign \n to increase awareness of ongoing racial grievances"),
+                  c("DV Locomotion Political Activities",
+                   "Attend a training on how to facilitate workshops \n on identifying and reducing implicit racial bias",
+                   "Recruit friends and neighbors to participate in \n a workshop on reducing implicit racial bias",
+                   "Participate in a nonviolent march on the need to \n acknowledge past and current racial harms and discrimination",
+                   "Share posts on social media on the need to \n address racial discrimination in the U.S.",
+                   "Help raise donations to support a campaign \n to increase awareness of ongoing racial grievances")
+                  )
+```
+
+**DV3 Locomotion Community**
+
+```{r}
+newdat %>%
+  filter(RaceGroup %in% c("White", "Black", "non-Black POC")) %>%
+  group_by(RaceGroup) %>%
+  dplyr::summarise(dimension = Anova(lm(DVloco_comm~RaceGroup, data = newdat), type = 3),
+                   item1 = Anova(lm(Q39~RaceGroup, data = newdat), type = 3),
+                   item2 = Anova(lm(Q40~RaceGroup, data = newdat), type = 3),
+                   item3 = Anova(lm(Q71~RaceGroup, data = newdat), type = 3),
+                   item4 = Anova(lm(Q72~RaceGroup, data = newdat), type = 3),
+                   item5 = Anova(lm(Q73~RaceGroup, data = newdat), type = 3),
+                   item6 = Anova(lm(Q34~RaceGroup, data = newdat), type = 3)
+                   )  %>%
+  pull(item1)
+#item 2, 3 n.s.
+```
+
+
+```{r}
+func_dotplotsmall(megaRace, aes(x = factor(Item, levels = rev(unique(Item))), y = Mean, size = N, fill = RaceGroup),c("DV Locomotion Community Activities",
+                   "Help organize a community potluck where neighbors \n from different racial/cultural groups share dishes",
+                   "Help organize an outdoor hike that matches people \n from different racial groups to get to know each other",
+                   "Volunteer at a local garden that provides fresh \n vegetables to a racially diverse low-income community",
+                   "Actively participate in activities celebrating \n Cultural Heritage Month in your community",
+                   "Recruit others to participate in an online forum for \n sharing photographs of personal objects from their backgrounds",
+                   "Help promote an online platform where people share \n stories of meaningful interracial friendships they have enjoyed"), 
+                  c("DV Locomotion Community Activities",
+                   "Help organize a community potluck where neighbors \n from different racial/cultural groups share dishes",
+                   #"Help organize an outdoor hike that matches people \n from different racial groups to get to know each other",
+                  #"Volunteer at a local garden that provides fresh \n vegetables to a racially diverse low-income community",
+                   "Actively participate in activities celebrating \n Cultural Heritage Month in your community",
+                   "Recruit others to participate in an online forum for \n sharing photographs of personal objects from their backgrounds",
+                   "Help promote an online platform where people share \n stories of meaningful interracial friendships they have enjoyed")
+                  )
+```
+
+
+
+### Politics
+
+**Mindtypes ANOVA**
+```{r}
+newdat %>%
+  filter(Politics %in% c("Democrat", "Independent", "Republican")) %>%
+  group_by(Politics) %>%
+  dplyr::summarise(
+                   item1 = Anova(lm(Q5~Politics, data = newdat), type = 3),
+                   item2 = Anova(lm(Q6~Politics, data = newdat), type = 3),
+                   item3 = Anova(lm(Q8~Politics, data = newdat), type = 3),
+                   item4 = Anova(lm(promotion~Politics, data = newdat), type = 3),
+                   item5 = Anova(lm(Q11~Politics, data = newdat), type = 3),
+                   item6 = Anova(lm(Q12~Politics, data = newdat), type = 3),
+                   item7 = Anova(lm(Q13~Politics, data = newdat), type = 3),
+                   item8 = Anova(lm(prevention~Politics, data = newdat), type = 3),
+                   item9 = Anova(lm(assessment~Politics, data = newdat), type = 3),
+                   item10 = Anova(lm(locomotion~Politics, data = newdat), type = 3),
+                   item11 = Anova(lm(multiculture_inclusive~Politics, data = newdat), type = 3),
+                   
+                   item12 = Anova(lm(self_hatred~Politics, data = newdat), type = 3)
+                   )  %>%
+  pull(item11)
+#item 1,3, 4, 7, 10
+```
+
+```{r}
+func_dotplotsmall(megaPolitics, aes(x = factor(Item, levels = rev(unique(Item))), y = Mean, size = N, fill = Politics), c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average",
+                   "Locomotion Average",
+                   "Assessment Average",
+                   "Multicultural Inclusive",
+                   "Self Hatred"), 
+                  c("Enhance everyone's health & wellbeing",
+                   #"Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   #"Militant/extreme members make it worse",
+                   #"Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   #"Prevention Average",
+                   #"Locomotion Average",
+                   "Assessment Average",
+                   "Multicultural Inclusive",
+                   "Self Hatred"))
+```
+
+**DV1 Assessment Activities**
+
+
+```{r}
+newdat %>%
+  filter(Politics %in% c("Democrat", "Independent", "Republican")) %>%
+  group_by(Politics) %>%
+  dplyr::summarise(dimension = Anova(lm(DVassessment~Politics, data = newdat), type = 3),
+                   item1 = Anova(lm(Q21~Politics, data = newdat), type = 3),
+                   item2 = Anova(lm(Q22~Politics, data = newdat), type = 3),
+                   item3 = Anova(lm(Q23~Politics, data = newdat), type = 3),
+                   item4 = Anova(lm(Q25~Politics, data = newdat), type = 3),
+                   item5 = Anova(lm(Q26~Politics, data = newdat), type = 3),
+                   item6 = Anova(lm(Q33~Politics, data = newdat), type = 3),
+                   item7 = Anova(lm(Q34~Politics, data = newdat), type = 3),
+                   item8 = Anova(lm(Q35~Politics, data = newdat), type = 3),
+                   item9 = Anova(lm(Q36~Politics, data = newdat), type = 3),
+                   item10 = Anova(lm(Q37~Politics, data = newdat), type = 3),
+                   item11 = Anova(lm(Q38~Politics, data = newdat), type = 3)
+                   )  %>%
+  pull(item8)
+#6 , 7, 8 n,s,
+```
+
+```{r}
+func_dotplotsmall(megaPolitics, aes(x = factor(Item, levels = rev(unique(Item))), y = Mean, size = N, fill = Politics), c("DV Assessment Activites",
+                   "Listen to a debate on racial equity with \n informed speakers from different racial groups",
+                   "Listen to a presentation on the history of \n slavery & discrimination of racial groups",
+                   "Watch an online training on how to identify \n instances of racial bias and discrimination",
+                   "Watch videos of Black Americans sharing \n compelling stories of their experiences of racism",
+                   "Listen to a podcast on the histories of \n struggles of diff(erent) races in the U.S",
+                   "Listen to members of diff racial groups share \n stories about their favorite memories of growing up",
+                   "Watch short videos people of diff race tell \n what they are most proud of in America",
+                   "Listen to a multiracial group of American citizens \n discuss how they work together to help their community thrive",
+                   "Listen to Black Americans discuss specific ways \n that White Americans can help to address racism and build connections",
+                   "Watch a video on how a multiracial coalition came \n together to promote fair access to decent housing in their community",
+                   "Listen to a multiracial panel of popular artists \n speak about their visions for a equitable and inclusive America"), 
+                  c("DV Assessment Activites",
+                   "Listen to a debate on racial equity with \n informed speakers from different racial groups",
+                   "Listen to a presentation on the history of \n slavery & discrimination of racial groups",
+                   "Watch an online training on how to identify \n instances of racial bias and discrimination",
+                   "Watch videos of Black Americans sharing \n compelling stories of their experiences of racism",
+                   "Listen to a podcast on the histories of \n struggles of diff(erent) races in the U.S",
+                   #"Listen to members of diff racial groups share \n stories about their favorite memories of growing up",
+                   #"Watch short videos people of diff race tell \n what they are most proud of in America",
+                   #"Listen to a multiracial group of American citizens \n discuss how they work together to help their community thrive",
+                   "Listen to Black Americans discuss specific ways \n that White Americans can help to address racism and build connections",
+                   "Watch a video on how a multiracial coalition came \n together to promote fair access to decent housing in their community",
+                   "Listen to a multiracial panel of popular artists \n speak about their visions for a equitable and inclusive America"))
+```
+
+**DV2 Locomotion Political Activities**
+```{r}
+newdat %>%
+  filter(Politics %in% c("Democrat", "Independent", "Republican")) %>%
+  group_by(Politics) %>%
+  dplyr::summarise(dimension = Anova(lm(DVloco_politic~Politics, data = newdat), type = 3),
+                   item1 = Anova(lm(Q27~Politics, data = newdat), type = 3),
+                   item2 = Anova(lm(Q28~Politics, data = newdat), type = 3),
+                   item3 = Anova(lm(Q29~Politics, data = newdat), type = 3),
+                   item4 = Anova(lm(Q30~Politics, data = newdat), type = 3),
+                   item5 = Anova(lm(Q32~Politics, data = newdat), type = 3)
+                   )  %>%
+  pull(item2)
+#all significant
+```
+
+```{r}
+
+func_dotplotsmall(megaPolitics, aes(x = factor(Item, levels = rev(unique(Item))), y = Mean, size = N, fill = Politics), c("DV Locomotion Political Activities",
+                   "Attend a training on how to facilitate workshops \n on identifying and reducing implicit racial bias",
+                   "Recruit friends and neighbors to participate in \n a workshop on reducing implicit racial bias",
+                   "Participate in a nonviolent march on the need to \n acknowledge past and current racial harms and discrimination",
+                   "Share posts on social media on the need to \n address racial discrimination in the U.S.",
+                   "Help raise donations to support a campaign \n to increase awareness of ongoing racial grievances"),
+                  c("DV Locomotion Political Activities",
+                   "Attend a training on how to facilitate workshops \n on identifying and reducing implicit racial bias",
+                   "Recruit friends and neighbors to participate in \n a workshop on reducing implicit racial bias",
+                   "Participate in a nonviolent march on the need to \n acknowledge past and current racial harms and discrimination",
+                   "Share posts on social media on the need to \n address racial discrimination in the U.S.",
+                   "Help raise donations to support a campaign \n to increase awareness of ongoing racial grievances")
+                  )
+```
+
+**DV3 Locomotion Community**
+
+```{r}
+newdat %>%
+  filter(Politics %in% c("Democrat", "Independent", "Republican")) %>%
+  group_by(Politics) %>%
+  dplyr::summarise(dimension = Anova(lm(DVloco_comm~Politics, data = newdat), type = 3),
+                   item1 = Anova(lm(Q39~Politics, data = newdat), type = 3),
+                   item2 = Anova(lm(Q40~Politics, data = newdat), type = 3),
+                   item3 = Anova(lm(Q71~Politics, data = newdat), type = 3),
+                   item4 = Anova(lm(Q72~Politics, data = newdat), type = 3),
+                   item5 = Anova(lm(Q73~Politics, data = newdat), type = 3),
+                   item6 = Anova(lm(Q34~Politics, data = newdat), type = 3)
+                   )  %>%
+  pull(item4)
+#onlt 4 significant
+```
+
+
+```{r}
+func_dotplotsmall(megaPolitics, aes(x = factor(Item, levels = rev(unique(Item))), y = Mean, size = N, fill = Politics),c("DV Locomotion Community Activities",
+                   "Help organize a community potluck where neighbors \n from different racial/cultural groups share dishes",
+                   "Help organize an outdoor hike that matches people \n from different racial groups to get to know each other",
+                   "Volunteer at a local garden that provides fresh \n vegetables to a racially diverse low-income community",
+                   "Actively participate in activities celebrating \n Cultural Heritage Month in your community",
+                   "Recruit others to participate in an online forum for \n sharing photographs of personal objects from their backgrounds",
+                   "Help promote an online platform where people share \n stories of meaningful interracial friendships they have enjoyed"), 
+                  c("Actively participate in activities celebrating \n Cultural Heritage Month in your community"))
+```
+
+
+### Gender
+
+```{r, fig.showtext=TRUE}
+dotGender <- newdat %>%
+  filter(Gender %in% c("Female", "Male")) %>%
+  group_by(Gender) %>%
+  dplyr::summarise(N = n(),
+                   "Enhance everyone's health & wellbeing" = mean(Q5, na.rm = TRUE),
+                   "Greater economic prosperity to area" = mean(Q6, na.rm = TRUE),
+                   "Better future for next generation" = mean(Q8, na.rm = TRUE),
+                   "Promotion Average" = mean(promotion, na.rm = TRUE),
+                   "Militant/extreme members make it worse" = mean(Q11, na.rm = TRUE),
+                   "Don't want loved ones to die/be harmed" = mean(Q12, na.rm = TRUE),
+                   "End number of Americans killed/injured" = mean(Q13, na.rm = TRUE),
+                   "Prevention Average" = mean(prevention, na.rm = TRUE),
+                   "Locomotion Average" = mean(locomotion, na.rm = TRUE),
+                   "Assessment Average" = mean(assessment, na.rm = TRUE)) %>%
+  pivot_longer(c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average", "Locomotion Average", "Assessment Average"), 
+               names_to = "Item", values_to = "Mean") %>%
+  ggplot(aes(x = factor(Item, levels = rev(unique(Item)), ordered = TRUE),
+             y = Mean, size = N, fill = Gender)) +
+  scale_fill_manual(values = col_fourdot) +
+  #geom_line(aes(group = Item), size = .2) +
+  geom_point(aes(size = N), shape = 21, alpha = .7) +
+  scale_size_binned(range = c(1,3)) +
+  theme(legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm')) +
+  ylim(1,6) +
+  labs(x = NULL, y = "Mean (Not At All - Extremely Motivating)",
+       title = "Mean by Gender") +
+  theme(plot.title = element_text(size = 5)) +
+  coord_flip() + 
+  theme_bw()
+
+ggplotly(dotGender)
+```
+
+```{r, fig.showtext=TRUE}
+newdat %>%
+  filter(!is.na(SES) & SES != "Prefer not to answer") %>%
+  group_by(SES) %>%
+  dplyr::summarise(N = n(),
+                   "Enhance everyone's health & wellbeing" = mean(Q5, na.rm = TRUE),
+                   "Greater economic prosperity to area" = mean(Q6, na.rm = TRUE),
+                   "Better future for next generation" = mean(Q8, na.rm = TRUE),
+                   "Promotion Average" = mean(promotion, na.rm = TRUE),
+                   "Militant/extreme members make it worse" = mean(Q11, na.rm = TRUE),
+                   "Don't want loved ones to die/be harmed" = mean(Q12, na.rm = TRUE),
+                   "End number of Americans killed/injured" = mean(Q13, na.rm = TRUE),
+                   "Prevention Average" = mean(prevention, na.rm = TRUE),
+                   "Locomotion Average" = mean(locomotion, na.rm = TRUE),
+                   "Assessment Average" = mean(assessment, na.rm = TRUE)) %>%
+  pivot_longer(c("Enhance everyone's health & wellbeing",
+                   "Greater economic prosperity to area",
+                   "Better future for next generation",
+                   "Promotion Average",
+                   "Militant/extreme members make it worse",
+                   "Don't want loved ones to die/be harmed",
+                   "End number of Americans killed/injured",
+                   "Prevention Average", "Locomotion Average", "Assessment Average"), 
+               names_to = "Item", values_to = "Mean") %>%
+  ggplot(aes(x = factor(Item, levels = rev(unique(Item)), ordered = TRUE),
+             y = Mean, size = N, fill = SES)) +
+  scale_fill_manual(values = col_fourdot) +
+  geom_line(aes(group = Item), size = .2) +
+  geom_point(aes(size = N), shape = 21, alpha = .7) +
+  scale_size_binned(range = c(1,4)) +
+  theme(legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm')) +
+  ylim(1,6) +
+  labs(x = NULL, y = "Mean (Not At All - Extremely Motivating)",
+       title = "Mean by SES") +
+  theme(plot.title = element_text(size = 5)) +
+  coord_flip() + 
+  theme_bw() +
+  theme(legend.position = "bottom", legend.direction = "vertical") 
+
+```
+
+\pagebreak
+
+# Data Analysis
+
+## Correlogram
+
+### All Data
+Code from Bowers et al., 2022 and the code from chapter five of the “Exploring, Visualizing, and Modeling Big Data with R” book written by Okan Bulut and Christopher Desjardins (2021).
+Can divide by column, so maybe divide by experimental conditions
+```{r correlogram, fig.showtext=TRUE}
+library(GGally)
+
+#Customize names within visual example
+#names(df)[1] <- "Promotion Mindtype"
+
+
+ggpairs(newdat[,c(79:89)], aes(color = newdat$Condition, alpha = .05),
+        title = "Correlations between Variables by Experimental Condition",
+        upper = list(continous = wrap("cor", linewidth = 2.5))) +
+  scale_color_manual(values = c("#82A3FF", "#8B2E2E")) +
+  scale_fill_manual(values = c("#82A3FF", "#8B2E2E"))
+```
+Multi-culturalist inclusive, similar to prior studies, is significantly correlated with promotion & prevention
+
+```{r, fig.showtext=TRUE}
+#remove self-hatred and multiculturalist inclusive
+ggpairs(newdat[,c(79:82,86,88,89)], aes(color = newdat$Condition, alpha = .05),
+        title = "Correlations between Variables by Experimental Condition",
+        upper = list(continous = wrap("cor", size = 1.5))) +
+  scale_color_manual(values = c("#82A3FF", "#8B2E2E")) +
+  scale_fill_manual(values = c("#82A3FF", "#8B2E2E"))
+```
+
+### Extreme Scores: Prevention/ Promotion
+
+```{r}
+ppdat <- newdat %>%
+  mutate(ppdiff = abs(promotion-prevention))
+summary(ppdat$ppdiff)
+ppdat <- ppdat %>%
+  filter(ppdiff > 0.8557)
+summary(ppdat$Condition)
+```
+
+```{r, fig.showtext=TRUE}
+#remove self-hatred and multiculturalist inclusive
+ggpairs(ppdat[,c(79:82,86,88,89)], aes(color = ppdat$Condition, alpha = .05),
+        title = "Correlations between Variables by Experimental Condition",
+        upper = list(continous = wrap("cor", size = 1.5))) +
+  scale_color_manual(values = c("#82A3FF", "#8B2E2E")) +
+  scale_fill_manual(values = c("#82A3FF", "#8B2E2E"))
+```
+### Extreme Scores: Assessment/ Locomotion
+
+```{r}
+aldat <- newdat %>%
+  mutate(aldiff = abs(assessment-locomotion))
+summary(aldat$aldiff)
+aldat <- aldat %>%
+  filter(aldiff > 1.0557)
+summary(aldat$Condition)
+```
+
+```{r, fig.showtext=TRUE}
+#remove self-hatred and multiculturalist inclusive
+ggpairs(aldat[,c(79:82,86,88,89)], aes(color = aldat$Condition, alpha = .05),
+        title = "Correlations between Variables by Experimental Condition",
+        upper = list(continous = wrap("cor", size = 1.5))) +
+  scale_color_manual(values = c("#82A3FF", "#8B2E2E")) +
+  scale_fill_manual(values = c("#82A3FF", "#8B2E2E"))
+```
+## Scatterplot
+```{r import packages}
+library(rstatix)
+library(ggExtra)
+library(grid)
+
+cbPalette <- c("#82A3FF", "#999999", "#8B2E2E")
+```
+
+```{r}
+#trichotomize multiculturalist inclusive 
+summary(newdat$multiculture_inclusive)
+sd(newdat$multiculture_inclusive)
+#create new variables by cutting
+newdat <- newdat %>%
+  mutate(MILevel = cut(multiculture_inclusive, breaks = c(-Inf, 5.549, Inf),
+                       labels = c("Low", "High")))
+```
+### DV1: Assessment Activities
+
+```{r scatterplot DV3}
+
+# Low MI
+scatterpro_proDV3 <- newdat %>%
+  filter(MILevel == "Low") %>%
+  filter(!is.na(RaceGroup)) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, RaceGroup) %>%
+  ggplot(aes(x = promotion, y = DVassessment, 
+                              color = RaceGroup)) + 
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("White", 
+                                 "Black", 
+                                "non-Black POC")) + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Promotion Mindtype Score", 
+       y = "Low Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+scatterpro_proDV3plot <- ggMarginal(scatterpro_proDV3, type = "density", groupColour = TRUE, groupFill = TRUE)
+```
+
+```{r}
+#Mid MI
+
+scatterpro_preDV3 <- newdat %>%
+  filter(MILevel == "High") %>%
+  filter(!is.na(RaceGroup)) %>%
+  dplyr::select(promotion, prevention, DVloco_politic, DVloco_comm, DVassessment, Condition, RaceGroup) %>%
+  ggplot(aes(x = promotion, y = DVassessment, 
+                              color = RaceGroup)) +  
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("White", 
+                                 "Black", 
+                                "non-Black POC")) + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Promotion Mindtype Score", 
+       y = "High Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+
+scatterpro_preDV3plot <- ggMarginal(scatterpro_preDV3, type = "density", groupColour = TRUE, groupFill = TRUE)
+
+```
+
+```{r scatter plot comparisons 6, fig.showtext=TRUE}
+gridExtra::grid.arrange(grobs = list(scatterpro_proDV3plot, scatterpro_preDV3plot), widths = c(1, 1),
+             top = textGrob("Promotion Score and Willingness for Assessment Activities", gp=gpar(fontface = "bold")),
+                            layout_matrix = rbind(c(1,2))) 
+```
+
+```{r}
+# Low MI
+scatterpre_proDV3plot <- newdat %>%
+  filter(MILevel == "Low") %>%
+  filter(!is.na(RaceGroup)) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, RaceGroup) %>%
+  ggplot(aes(x = locomotion, y = DVassessment, 
+                              color = RaceGroup)) + 
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("White", 
+                                 "Black", 
+                                "non-Black POC")) + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Locomotion Score", 
+       y = "Low Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+scatterpro_proDV3plot <- ggMarginal(scatterpro_proDV3, type = "density", groupColour = TRUE, groupFill = TRUE)
+```
+
+```{r}
+#Mid MI
+
+scatterpre_preDV3plot <- newdat %>%
+  filter(MILevel == "High") %>%
+  filter(!is.na(RaceGroup)) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, RaceGroup) %>%
+  ggplot(aes(x = locomotion, y = DVassessment, 
+                              color = RaceGroup)) +  
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("White", 
+                                 "Black", 
+                                "non-Black POC")) + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Locomotion Score", 
+       y = "High Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+
+scatterpro_preDV3plot <- ggMarginal(scatterpro_preDV3, type = "density", groupColour = TRUE, groupFill = TRUE)
+
+```
+
+```{r scatter plot comparisons 7, fig.showtext=TRUE}
+gridExtra::grid.arrange(grobs = list(scatterpre_proDV3plot, scatterpre_preDV3plot), widths = c(1, 1),
+             top = textGrob("Locomotion Score and Willingness for Assessment Activities", gp=gpar(fontface = "bold")),
+                            layout_matrix = rbind(c(1,2))) 
+```
+
+
+
+
+### DV2 Locomotion-Political
+
+```{r scatterplot1}
+
+#Low MI
+scatterpro_proDV1 <- newdat %>%
+  filter(MILevel == "Low") %>%
+  filter(Politics %in% c("Democrat", "Independent", "Republican")) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, Politics) %>%
+  ggplot(aes(x = promotion, y = DVloco_politic, 
+                              color = Politics)) + 
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("Democrat", 
+                                 "Independent", 
+                                "Republican")) + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Promotion Mindtype Score", 
+       y = "Low Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+scatterpro_proDV1plot <- ggMarginal(scatterpro_proDV1, type = "density", groupColour = TRUE, groupFill = TRUE)
+```
+
+```{r}
+#Promotion Orientation with Prevention Framing
+
+scatterpro_preDV1 <- newdat %>%
+  filter(MILevel == "High") %>%
+  filter(Politics %in% c("Democrat", "Independent", "Republican")) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, Politics) %>%
+  ggplot(aes(x = promotion, y = DVloco_politic, 
+                              color = Politics)) + 
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("Democrat", 
+                                 "Independent", 
+                                "Republican")) + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Promotion Mindtype Score", 
+       y = "High Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+
+scatterpro_preDV1plot <- ggMarginal(scatterpro_preDV1, type = "density", groupColour = TRUE, groupFill = TRUE)
+
+```
+
+```{r scatter plot comparisons2, fig.showtext=TRUE}
+gridExtra::grid.arrange(grobs = list(scatterpro_proDV1plot, scatterpro_preDV1plot), widths = c(1, 1),
+             top = textGrob("Promotion Orientation and Willingness for Locomotion-Political Activities", gp=gpar(fontface = "bold")),
+                            layout_matrix = rbind(c(1,2))) 
+```
+
+
+```{r scatterplot 3rd DV1}
+
+# Prevention Orientation with Promotion Framing
+scatterpre_proDV1 <- newdat %>%
+  filter(MILevel == "Low") %>%
+  filter(Politics %in% c("Democrat", "Independent", "Republican")) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, Politics) %>%
+  ggplot(aes(x = locomotion, y = DVloco_politic, 
+                              color = Politics)) +  
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("Democrat", 
+                                 "Independent", 
+                                "Republican"))  + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Locomotion Score", 
+       y = "Low Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+scatterpre_proDV1plot <- ggMarginal(scatterpre_proDV1, type = "density", groupColour = TRUE, groupFill = TRUE)
+```
+
+```{r}
+#Prevention Orientation with Prevention Framing
+
+scatterpre_preDV1 <- newdat %>%
+  filter(MILevel == "High") %>%
+  filter(Politics %in% c("Democrat", "Independent", "Republican")) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, Politics) %>%
+  ggplot(aes(x = locomotion, y = DVloco_politic, 
+                              color = Politics)) +  
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("Democrat", 
+                                 "Independent", 
+                                "Republican"))  + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Locomotion Score", 
+       y = "High Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+
+scatterpre_preDV1plot <- ggMarginal(scatterpre_preDV1, type = "density", groupColour = TRUE, groupFill = TRUE)
+
+```
+
+
+```{r scatter plot comparisons3, fig.showtext=TRUE}
+gridExtra::grid.arrange(grobs = list(scatterpre_proDV1plot, scatterpre_preDV1plot), widths = c(1, 1),
+             top = textGrob("Prevention Orientation and Willingness for Locomotion-Political Activities", gp=gpar(fontface = "bold")),
+                            layout_matrix = rbind(c(1,2))) 
+```
+### DV3: Locomotion-Community
+
+```{r scatterplot DV2}
+
+# Promotion Orientation with Promotion Framing
+scatterpro_proDV2 <- newdat %>%
+  filter(MILevel == "Low") %>%
+  filter(!is.na(RaceGroup)) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, RaceGroup) %>%
+  ggplot(aes(x = promotion, y = DVloco_comm, 
+                              color = RaceGroup)) +  
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("White", 
+                                 "Black", 
+                                "non-Black POC")) + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Promotion Score", 
+       y = "Low Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+scatterpro_proDV2plot <- ggMarginal(scatterpro_proDV2, type = "density", groupColour = TRUE, groupFill = TRUE)
+```
+
+```{r}
+#Promotion Orientation with Prevention Framing
+
+scatterpro_preDV2 <- newdat %>%
+  filter(MILevel == "High") %>%
+  filter(!is.na(RaceGroup)) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, RaceGroup) %>%
+  ggplot(aes(x = promotion, y = DVloco_comm, 
+                              color = RaceGroup)) +  
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("White", 
+                                 "Black", 
+                                "non-Black POC")) + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Promotion Score", 
+       y = "High Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+
+scatterpro_preDV2plot <- ggMarginal(scatterpro_preDV2, type = "density", groupColour = TRUE, groupFill = TRUE)
+
+```
+
+```{r scatter plot comparisons4, fig.showtext=TRUE}
+gridExtra::grid.arrange(grobs = list(scatterpro_proDV2plot, scatterpro_preDV2plot), widths = c(1, 1),
+             top = textGrob("Promotion Score and Willingness for Locomotion-Community Activities", gp=gpar(fontface = "bold")),
+                            layout_matrix = rbind(c(1,2))) 
+```
+```{r scatterplot 3rd DV2 5}
+
+# Prevention Orientation with Promotion Framing
+scatterpre_proDV2 <- newdat %>%
+  filter(MILevel == "Low") %>%
+  filter(!is.na(RaceGroup)) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, RaceGroup) %>%
+  ggplot(aes(x = locomotion, y = DVloco_comm, 
+                              color = RaceGroup)) + 
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("White", 
+                                 "Black", 
+                                "non-Black POC")) + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Locomotion Score", 
+       y = "Low Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+scatterpre_proDV2plot <- ggMarginal(scatterpre_proDV2, type = "density", groupColour = TRUE, groupFill = TRUE)
+```
+
+```{r}
+#Prevention Orientation with Prevention Framing
+
+scatterpre_preDV2 <- newdat %>%
+  filter(MILevel == "High") %>%
+  filter(!is.na(RaceGroup)) %>%
+  dplyr::select(promotion, prevention, locomotion, DVloco_politic, DVloco_comm, DVassessment, Condition, RaceGroup) %>%
+  ggplot(aes(x = locomotion, y = DVloco_comm, 
+                              color = RaceGroup)) + 
+  geom_point(alpha = 0.7) + 
+  geom_smooth(method = "lm", fill = NA) + 
+  scale_colour_manual(values=cbPalette, 
+                      labels = c("White", 
+                                 "Black", 
+                                "non-Black POC")) + 
+  #expand_limits(y = c(40, 85)) +
+  #scale_x_continuous(labels = scales::percent_format(accuracy = 1)) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid.major = element_blank(),
+        plot.title = element_text(size = 12, face = "bold")) + 
+  labs(x = "Locomotion Score", 
+       y = "High Multiculturalist Inclusive",
+       title = "", 
+       caption = "\n")
+scatterpre_preDV2plot <- ggMarginal(scatterpre_preDV2, type = "density", groupColour = TRUE, groupFill = TRUE)
+
+```
+
+
+```{r scatter plot comparisons 5, fig.showtext=TRUE}
+gridExtra::grid.arrange(grobs = list(scatterpre_proDV2plot, scatterpre_preDV2plot), widths = c(1, 1),
+             top = textGrob("Locomotion Score and Willingness for Locomotion-Political Activities", gp=gpar(fontface = "bold")),
+                            layout_matrix = rbind(c(1,2))) 
+```
+
+
+## Analyses 
+
+**Prep**
+
+Make a dummy variable for experimental condition
+0 = Promotion, 1 = Prevention
+```{r}
+newdat <- newdat %>%
+  mutate(Condition_dummy = ifelse(Condition == "PromotionF", 0, 1)) #promotion = 0
+
+#dummy code for political group & for race
+newdat <- newdat %>%
+  mutate(White_dm = ifelse(RaceGroup == "White", 1, 0),
+         Black_dm = ifelse(RaceGroup == "Black", 1, 0),
+         Democrat_dm = ifelse(Politics == "Democrat", 1, 0),
+         Republican_dm = ifelse(Politics == "Republican", 1, 0))
+```
+
+### Moderation Analyses
+
+```{r}
+summary(lm(DVassessment~promotion + Condition_dummy + promotion*Condition_dummy, data = newdat))
+
+summary(lm(DVloco_politic~promotion + Condition_dummy + promotion*Condition_dummy, data = newdat))
+
+summary(lm(DVloco_comm~promotion + Condition_dummy + promotion*Condition_dummy, data = newdat))
+
+#basically framing has no effect in terms of matching
+
+```
+
+
+
+
+
+
+### Structural Equation Modeling (SEM)
+
+
+```{r}
+sem_model <- '
+  #latent variables
+    peacemindtype =~ promotion + prevention
+    locoassess =~ locomotion + assessment
+    identitysalience =~ self_hatred + multiculture_inclusive
+    bbe =~ DVassessment + DVloco_politic + DVloco_comm
+  #regression
+    bbe ~ Condition_dummy + peacemindtype + locoassess + identitysalience
+'
+
+fit_sem <- sem(sem_model, data = newdat)
+summary(fit_sem, standardized = TRUE)
+```
+Nothing significant, should do hierarchical now? 
+
+
+### Hierarchical Regression
+
+#### Promotion and Prevention Fit 
+
+```{r}
+
+newdat2 <- newdat %>%
+  filter(Politics %in% c("Democrat", "Independent", "Republican"))
+
+newdat2pro <- newdat2 %>%
+  filter(Condition == "PromotionF")
+
+newdat2pre <- newdat2 %>%
+  filter(Condition == "PreventionF")
+```
+Promotion
+```{r}
+## DV Total
+DV1Model1 <- lm(DVtotal~ RaceGroup + Politics + multiculture_inclusive + self_hatred + locomotion + assessment, data = newdat2pro) #Control for identity salience
+#self-hatred is not that significant for this and also political group not that signicant
+summary(DV1Model1)
+
+DV1Model2 <- lm(DVtotal~ RaceGroup + Politics + multiculture_inclusive + self_hatred + locomotion + assessment + prevention + promotion, data = newdat2pro)
+summary(DV1Model2) #interesting that only locomotion was significant, not assessment
+
+
+
+anova(DV1Model1, DV1Model2) 
+```
+
+```{r}
+## DV Total
+DV1Model1 <- lm(DVtotal~ RaceGroup + Politics + multiculture_inclusive + self_hatred + locomotion + assessment, data = newdat2pre) #Control for identity salience
+#self-hatred is not that significant for this and also political group not that signicant
+summary(DV1Model1)
+
+DV1Model2 <- lm(DVtotal~ RaceGroup + Politics + multiculture_inclusive + self_hatred + locomotion + assessment + prevention + promotion, data = newdat2pre)
+summary(DV1Model2) #interesting that only locomotion was significant, not assessment
+
+
+
+anova(DV1Model1, DV1Model2) 
+```
+
+#### Locomotion Assessment
+
+
+```{r}
+
+###DV1: DVassessment #######
+DV1Model1 <- lm(DVassessment~ RaceGroup + Politics + multiculture_inclusive + self_hatred + promotion + prevention, data = newdat2) #Control for identity salience
+#self-hatred is not that significant for this and also political group not that signicant
+summary(DV1Model1)
+
+DV1Model2 <- lm(DVassessment~ RaceGroup + Politics + multiculture_inclusive + self_hatred + prevention + promotion + locomotion + assessment , data = newdat2)
+summary(DV1Model2) #interesting that only locomotion was significant, not assessment
+
+
+
+anova(DV1Model1, DV1Model2) #Model 3 has significant differences
+# framing did not matter for assessment; higher promotion and higher locomotion, the more willingness
+```
+
+DV2 Locomotion Political
+
+```{r}
+###DV2: loco political #######
+DV2Model1 <- lm(DVloco_politic~ RaceGroup + Politics + multiculture_inclusive + self_hatred + promotion + prevention, data = newdat2) #Control for identity salience
+#self-hatred is not that significant for this and also political group not that signicant
+summary(DV2Model1)
+
+DV2Model2 <- lm(DVloco_politic~ RaceGroup + Politics + multiculture_inclusive + self_hatred + prevention + promotion + locomotion + assessment , data = newdat2)
+summary(DV2Model2) #interesting that only locomotion was significant, not assessment
+
+
+
+anova(DV2Model1, DV2Model2) #Model 3 has significant differences
+# framing did not matter for assessment; higher promotion and higher locomotion, the more willingness
+```
+
+Locomotion Community Activities
+
+```{r}
+###DV3: loco community #######
+DV3Model1 <- lm(DVloco_comm~ RaceGroup + Politics + multiculture_inclusive + self_hatred + promotion + prevention, data = newdat2) #Control for identity salience
+#self-hatred is not that significant for this and also political group not that signicant
+summary(DV3Model1)
+
+DV3Model2 <- lm(DVloco_comm~ RaceGroup + Politics + multiculture_inclusive + self_hatred + prevention + promotion + locomotion + assessment , data = newdat2)
+summary(DV3Model2) #interesting that only locomotion was significant, not assessment
+
+
+
+anova(DV3Model1, DV3Model2) #Model 3 has significant differences
+# framing did not matter for assessment; higher promotion and higher locomotion, the more willingness
+```
+
+
+### Logistic Regression (ML)
+
+
+```{r, echo = TRUE}
+library(foreign)
+library(MASS)
+library(Hmisc)
+library(reshape2)
+
+#dichotomize promotion  
+summary(newdat$promotion)
+summary(newdat$prevention)
+summary(newdat$assessment)
+summary(newdat$locomotion)
+
+
+#create new variables by cutting
+newdat <- newdat %>%
+  mutate(promotionDi = cut(promotion, breaks = c(-Inf, 4.623, Inf),
+                       labels = c("Low", "High")),
+         preventionDi = cut(prevention, breaks = c(-Inf, 4.809, Inf),
+                       labels = c("Low", "High")),
+         assessmentDi = cut(assessment, breaks = c(-Inf, 4.347, Inf),
+                       labels = c("Low", "High")),
+         locomotionDi = cut(locomotion, breaks = c(-Inf, 4.407, Inf),
+                       labels = c("Low", "High")),
+         DV1Level = cut(DVloco_politic, breaks = c(-Inf, 3.128, Inf),
+                        labels = c("Less Willing", "More Willing")),
+         DV2Level = cut(DVloco_comm, breaks = c(-Inf, 3.455, Inf),
+                        labels = c("Less Willing", "More Willing")),
+         DV3Level = cut(DVassessment, breaks = c(-Inf, 3.944, Inf),
+                        labels = c("Less Willing", "More Willing")))
+```
+
+```{r frequency table}
+table(newdat$Condition, newdat$DV1Level)
+```
+
+Separate the data into training and testing
+```{r training & testing}
+#Dividing data into training and test set
+#Random sampling 
+samplesize = 0.70*nrow(newdat)
+set.seed(123)
+index = sample(seq_len(nrow(newdat)), size = samplesize)
+#Creating training and test set 
+datatrain = newdat[index,]
+datatest = newdat[-index,]
+```
+
+Build model on training data
+```{r}
+# Logistics Regression
+glm.fitDV1 <- glm(DV1Level ~ promotionDi + Condition + locomotionDi, data = datatrain, family = binomial)
+summary(glm.fitDV1)
+
+```
+```{r}
+glm.probs <- predict(glm.fitDV1, newdata = datatest, type = "response")
+glm.probs[1:10]
+
+```
+The probability varies but can set threshold at 0.4
+```{r}
+glm.pred <- ifelse(glm.probs > 0.4, "Willing", "Unwilling")
+
+```
+Evaluate the model
+```{r}
+DV1test = datatest$DV1Level
+table(glm.pred, DV1test)
+
+
+
+```
+
+DV3
+
+Build model on training data
+```{r}
+# Logistics Regression
+glm.fitDV3 <- glm(DV3Level ~ promotionDi + Condition + assessmentDi , data = datatrain, family = binomial)
+summary(glm.fitDV3)
+
+```
+```{r}
+glm.probs <- predict(glm.fitDV3, newdata = datatest, type = "response")
+glm.probs[1:10]
+
+```
+The probability varies but can set threshold at 0.6
+```{r}
+glm.pred <- ifelse(glm.probs > 0.6, "Willing", "Unwilling")
+
+```
+Evaluate the model
+```{r}
+DV3test = datatest$DV3Level
+table(glm.pred, DV3test)
+
+```
+
+### Ordinal
+
+Build the model using training set
+```{r, eval = FALSE}
+#Build ordinal logistic regression model
+model= polr(DV1Level ~ promotionDi + preventionDi + Condition + locomotionDi, data = datatrain, Hess = TRUE)
+summary(model)
+```
+The interpretation for the coefficients: Holding everything else constant, an increase in value of promotion by one unit increase the expected value of willingness in log odds by 0.82. 
+
+**Evaluating the Model**
+```{r, eval = FALSE}
+#Compute confusion table and misclassification error
+predictDV1 = predict(model,datatest)
+table(datatest$DV1Level, predictDV1)
+mean(as.character(datatest$DV1Level) != as.character(predictDV1))
+```
+
+```{r, eval = FALSE}
+#Plotting the effects 
+library(effects)
+#Effect(focal.predictors = "assessementDi",model)
+plot(Effect(focal.predictors = "locomotionDi",model))
+plot(Effect(focal.predictors = c("locomotionDi", "promotionDi", "Condition"),model))
+```
+
+This is saying that locomotion level and promotion level and framing increases the likelihood of classification into  willingness class, while decreasing the likelihood of classification into unwillingness class.

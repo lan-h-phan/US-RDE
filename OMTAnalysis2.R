@@ -32,7 +32,11 @@ dat$PoliGroup <- factor(dat$Politics, labels = c(1,2,3,4,5))
 dat2 <- select(dat, RaceGroup, Gender, PoliGroup, Condition, Difference, DiffAbs,
                ERAM, ERMD, ERSH, ERAD, ERET, ERMI,ERERS, ProCont, ProDich, PreCont, PreDich, DVDiaEdu, DVSocPhy, DVMedia, DVTotal)
 
+cor.test(dat2$ERMI, dat2$DVTotal, method = "pearson")
 
+## just make correlations stuff
+dat4 <- select(dat2, ERAM, ERMD, ERSH, ERAD, ERET, ERMI,ERERS, ProCont, ProDich, PreCont, PreDich, DVDiaEdu, DVSocPhy, DVMedia, DVTotal)
+cor(dat4)
 ############################################
 #Two-way ANOVA
 ############################################
@@ -651,6 +655,17 @@ emmip(object = emmERMD,
       formula = RaceGroup~PoliGroup,
       CIs = TRUE)
 
+
+##### get descriptives
+dat4 %>%
+  group_by(RaceGroup) %>%
+  summarise(M = mean(ERMD, na.rm = TRUE),
+            SD = sd(ERMD, na.rm = TRUE))
+
+by(dat4$ERMD, dat4$RaceGroup, mean, na.rm = TRUE)
+
+by(dat4$ERMD, dat4$RaceGroup, sd, na.rm = TRUE)
+
 ##### ERSH (Self-Hatred)
 lmERSH <- lm(ERSH~RaceGroup*PoliGroup, data = dat4)
 summary(lmERSH)
@@ -662,6 +677,14 @@ emmERSH <- emmeans(object = lmERSH,
 emmip(object = emmERSH,
       formula = RaceGroup~PoliGroup,
       CIs = TRUE)
+
+lmERSH <- lm(ERSH~PoliGroup, data = dat4)
+summary(lmERSH)
+
+by(dat4$ERSH, dat4$PoliGroup, mean, na.rm = TRUE)
+
+by(dat4$ERSH, dat4$PoliGroup, sd, na.rm = TRUE)
+
 
 ##### ERAD (Anti-Dominant)
 lmERAD <- lm(ERAD~RaceGroup*PoliGroup, data = dat4)
@@ -754,3 +777,11 @@ emmTotal <- emmeans(object = lmTotal,
 emmip(object = emmTotal,
       formula = RaceGroup~PoliGroup,
       CIs = TRUE)
+
+lmTotal <- lm(DVTotal~PoliGroup, data = dat4)
+summary(lmTotal)
+
+
+by(dat4$DVTotal, dat4$PoliGroup, mean, na.rm = TRUE)
+
+by(dat4$DVTotal, dat4$PoliGroup, sd, na.rm = TRUE)

@@ -317,7 +317,7 @@ ggplotly(plotdiff)
 ```{r}
 #setting up 
 # Connected Dot Plot yayyy
-col_dotplot <- c("#E69F00", "#0072B2", "#D55E00", "#56B4E9", "#800000")
+col_fourdot <- c("#E69F00", "#0072B2", "#E6E6FA", "#A0DB8E", "#800000")
 ```
 Part of the following R codes for the connected dot plot are from Bowers et al., 2022. 
 ### Politics
